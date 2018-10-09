@@ -411,8 +411,32 @@ static void DoMenuHome()
     // Reset
     esp_restart();
 }
+static void DoMenuHomeNoSave()
+{
+    esp_err_t err;
+    uint16_t* param = 1;
+
+    // Clear audio to prevent studdering
+    printf("PowerDown: stopping audio.\n");
+
+    xQueueSend(audioQueue, &param, portMAX_DELAY);
+    while (AudioTaskIsRunning) {}
 
 
+    // Stop tasks
+    printf("PowerDown: stopping tasks.\n");
+
+    xQueueSend(vidQueue, &param, portMAX_DELAY);
+    while (videoTaskIsRunning) {}
+
+
+    // Set menu application
+    odroid_system_application_set(0);
+
+
+    // Reset
+    esp_restart();
+}
 
 void app_main(void)
 {
@@ -618,12 +642,12 @@ void app_main(void)
         }
 
         //if (!lastJoysticState.Menu && joystick.Menu)
-        if (menuButtonFrameCount > 60 * 2)
+        if (menuButtonFrameCount > 60 * 1)
         {
             // Save state
             gpio_set_level(GPIO_NUM_2, 1);
 
-            PowerDown();
+            DoMenuHome();
 
             gpio_set_level(GPIO_NUM_2, 0);
         }
@@ -631,10 +655,10 @@ void app_main(void)
         if (!ignoreMenuButton && lastJoysticState.values[ODROID_INPUT_MENU] && !joystick.values[ODROID_INPUT_MENU])
         {
             // Save state
-            gpio_set_level(GPIO_NUM_2, 1);
+            //gpio_set_level(GPIO_NUM_2, 1);
 
             //DoMenu();
-            DoMenuHome();
+            DoMenuHomeNoSave();
 
             gpio_set_level(GPIO_NUM_2, 0);
         }
