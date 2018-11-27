@@ -383,7 +383,7 @@ void nes_emulate(void)
    uint stopTime;
    uint totalElapsedTime = 0;
    int frame = 0;
-   int skipFrame = 0;
+   int skippedFrames = 0;
 
 
    for (int i = 0; i < 4; ++i)
@@ -399,19 +399,15 @@ void nes_emulate(void)
         nes_reset(SOFT_RESET);
     }
 
-   //const int frameTime = CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000 / NES_REFRESH_RATE;
+   const int frameTime = CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000 / NES_REFRESH_RATE;
+   bool renderFrame = true;
 
    while (false == nes.poweroff)
    {
        startTime = xthal_get_ccount();
 
-        bool renderFrame = ((skipFrame % 3) != 0);
-
         nes_renderframe(renderFrame);
         system_video(renderFrame);
-
-        /*if (skipFrame % 7 == 0) ++skipFrame;*/
-        ++skipFrame;
 
         do_audio_frame();
 
@@ -423,6 +419,14 @@ void nes_emulate(void)
         else
           elapsedTime = ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
 
+        // Don't allow skipping more than one frame at a time.
+        if (renderFrame && elapsedTime > frameTime) {
+            renderFrame = false;
+            skippedFrames++;
+        } else {
+            renderFrame = true;
+        }
+
         totalElapsedTime += elapsedTime;
         ++frame;
 
@@ -431,10 +435,13 @@ void nes_emulate(void)
           float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
           float fps = frame / seconds;
 
-          printf("HEAP:0x%x, FPS:%f, BATTERY:%d [%d]\n", esp_get_free_heap_size(), fps, battery.millivolts, battery.percentage);
+          printf("HEAP:0x%x, FPS:%f, FRAMESKIP:%d, BATTERY:%d [%d]\n",
+                 esp_get_free_heap_size(), fps, skippedFrames,
+                 battery.millivolts, battery.percentage);
 
           frame = 0;
           totalElapsedTime = 0;
+          skippedFrames = 0;
         }
    }
 }
