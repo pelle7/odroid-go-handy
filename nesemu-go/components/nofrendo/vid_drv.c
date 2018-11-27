@@ -31,12 +31,17 @@
 #include <gui.h>
 #include <osd.h>
 
+#define DOUBLE_BUFFER 0
 
 /* hardware surface */
 static bitmap_t *screen = NULL;
 
 /* primary / backbuffer surfaces */
-static bitmap_t *primary_buffer = NULL; //, *back_buffer = NULL;
+static bitmap_t *primary_buffer = NULL;
+
+#if DOUBLE_BUFFER
+static bitmap_t *back_buffer = NULL;
+#endif
 
 static viddriver_t *driver = NULL;
 
@@ -193,7 +198,12 @@ void vid_blit(bitmap_t *bitmap, int src_x, int src_y, int dest_x, int dest_y,
    primary_pitch = primary_buffer->pitch;
 
    /* do the copy */
-   while (height--)
+   if (bitmap_pitch == bitmap->width &&
+       primary_pitch == primary_buffer->width)
+   {
+      memcpy(dest_ptr, src_ptr, width * height);
+   }
+   else while (height--)
    {
       vid_memcpy(dest_ptr, src_ptr, width);
       src_ptr += bitmap_pitch;
@@ -357,10 +367,12 @@ void vid_flush(void)
    else
       vid_blitscreen(num_dirties, dirty_rects);
 
+#if DOUBLE_BUFFER
    /* Swap pointers to the main/back buffers */
-//   temp = back_buffer;
-//   back_buffer = primary_buffer;
-//   primary_buffer = temp;
+   temp = back_buffer;
+   back_buffer = primary_buffer;
+   primary_buffer = temp;
+#endif
 }
 
 /* emulated machine tells us which resolution it wants */
@@ -368,8 +380,10 @@ int vid_setmode(int width, int height)
 {
    if (NULL != primary_buffer)
       bmp_destroy(&primary_buffer);
-//   if (NULL != back_buffer)
-//      bmp_destroy(&back_buffer);
+#if DOUBLE_BUFFER
+   if (NULL != back_buffer)
+      bmp_destroy(&back_buffer);
+#endif
 
    primary_buffer = bmp_create(width, height, 0); /* no overdraw */
    if (NULL == primary_buffer)
@@ -379,7 +393,7 @@ int vid_setmode(int width, int height)
   }
 
    /* Create our backbuffer */
-#if 0
+#if DOUBLE_BUFFER
    back_buffer = bmp_create(width, height, 0); /* no overdraw */
    if (NULL == back_buffer)
    {
@@ -444,7 +458,7 @@ void vid_shutdown(void)
 
    if (NULL != primary_buffer)
       bmp_destroy(&primary_buffer);
-#if 0
+#if DOUBLE_BUFFER
    if (NULL != back_buffer)
       bmp_destroy(&back_buffer);
 #endif

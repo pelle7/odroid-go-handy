@@ -28,6 +28,7 @@
 #include <string.h>
 #include <noftypes.h>
 #include <bitmap.h>
+#include <nes.h>
 
 void bmp_clear(const bitmap_t *bitmap, uint8 color)
 {
@@ -76,28 +77,30 @@ static bitmap_t *_make_bitmap(uint8 *data_addr, bool hw, int width,
 }
 
 /* Allocate and initialize a bitmap structure */
-#define FRAME_BUFFER_LENGTH ((256 + (2 * 8)) * 240)
+#define FRAME_BUFFER_LENGTH (((NES_SCREEN_WIDTH + (2 * 8)) * NES_SCREEN_HEIGHT)*2)
+int frameIndex = 0;
 uint8 frameBuffer[FRAME_BUFFER_LENGTH];
 bitmap_t *bmp_create(int width, int height, int overdraw)
 {
     printf("bmp_create: width=%d, height=%d, overdraw=%d\n", width, height, overdraw);
 
    uint8 *addr;
-   int pitch;
+   //int pitch;
 
-   pitch = width + (overdraw * 2); /* left and right */
+   //pitch = width + (overdraw * 2); /* left and right */
    //addr = malloc((pitch * height) + 3); /* add max 32-bit aligned adjustment */
    //if (NULL == addr)
     //  return NULL;
 
-    if (pitch * height > FRAME_BUFFER_LENGTH)
-    {
-        abort();
-    }
+   int size = (width + (overdraw * 2)) * height;
+   if (size + frameIndex > FRAME_BUFFER_LENGTH)
+   {
+      abort();
+   }
+   addr = frameBuffer + frameIndex;
+   frameIndex += size;
 
-    addr = frameBuffer;
-
-   return _make_bitmap(addr, false, width, height, width, overdraw);
+   return _make_bitmap(addr, true, width, height, width, overdraw);
 }
 
 /* allocate and initialize a hardware bitmap */

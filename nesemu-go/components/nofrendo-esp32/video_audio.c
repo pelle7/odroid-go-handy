@@ -238,13 +238,14 @@ static void free_write(int num_dirties, rect_t *dirty_rects)
    bmp_destroy(&myBitmap);
 }
 
-static uint8_t lcdfb[256 * 224];
+//static uint8_t lcdfb[256 * 224];
 static void custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects) {
     if (bmp->line[0] != NULL)
     {
-        memcpy(lcdfb, bmp->line[0], 256 * 224);
+        //memcpy(lcdfb, bmp->line[0], 256 * 224);
 
-        void* arg = (void*)lcdfb;
+        //void* arg = (void*)lcdfb;
+        void* arg = (void*)bmp->line[0];
     	xQueueSend(vidQueue, &arg, portMAX_DELAY);
     }
 }
@@ -276,11 +277,11 @@ static void videoTask(void *arg) {
 	}
 
 
-    odroid_display_lock_nes_display();
+    odroid_display_lock();
 
     odroid_display_show_hourglass();
 
-    odroid_display_unlock_nes_display();
+    odroid_display_unlock();
     //odroid_display_drain_spi();
 
     exitVideoTaskFlag = true;
