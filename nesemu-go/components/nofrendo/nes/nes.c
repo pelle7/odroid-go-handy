@@ -381,8 +381,7 @@ void nes_emulate(void)
    uint stopTime;
    uint totalElapsedTime = 0;
    int frame = 0;
-   bool renderFrame = true;
-   //int skipFrame = 0;
+   int skipFrame = 0;
 
 
    for (int i = 0; i < 4; ++i)
@@ -404,13 +403,13 @@ void nes_emulate(void)
    {
        startTime = xthal_get_ccount();
 
-        //bool renderFrame = ((skipFrame % 2) == 0);
+        bool renderFrame = ((skipFrame % 3) != 0);
 
         nes_renderframe(renderFrame);
         system_video(renderFrame);
 
-        /*if (skipFrame % 7 == 0) ++skipFrame;
-        ++skipFrame;*/
+        /*if (skipFrame % 7 == 0) ++skipFrame;*/
+        ++skipFrame;
 
         do_audio_frame();
 
