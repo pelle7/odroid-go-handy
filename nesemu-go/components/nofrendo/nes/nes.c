@@ -40,6 +40,7 @@
 #include <nofrendo.h>
 #include "nesstate.h"
 
+#include <esp_attr.h>
 #include "esp_system.h"
 #include "../../odroid/odroid_input.h"
 
@@ -280,7 +281,7 @@ void nes_setfiq(uint8 value)
    nes.fiq_cycles = (int) NES_FIQ_PERIOD;
 }
 
-static void nes_checkfiq(int cycles)
+INLINE void nes_checkfiq(int cycles)
 {
    nes.fiq_cycles -= cycles;
    if (nes.fiq_cycles <= 0)
@@ -299,7 +300,7 @@ void nes_nmi(void)
    nes6502_nmi();
 }
 
-static void nes_renderframe(bool draw_flag)
+static void IRAM_ATTR nes_renderframe(bool draw_flag)
 {
    int elapsed_cycles;
    mapintf_t *mapintf = nes.mmc->intf;
