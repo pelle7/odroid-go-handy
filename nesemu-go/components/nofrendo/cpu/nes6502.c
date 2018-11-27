@@ -26,6 +26,8 @@
 */
 
 
+#pragma GCC optimize ("O3")
+
 #include <noftypes.h>
 #include "nes6502.h"
 #include "dis6502.h"
