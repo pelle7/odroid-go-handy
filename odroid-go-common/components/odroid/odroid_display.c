@@ -36,8 +36,8 @@ static spi_transaction_t trans[SPI_TRANSACTION_COUNT];
 static spi_device_handle_t spi;
 
 
-#define LINE_BUFFERS (2)
-#define LINE_COUNT (5)
+#define LINE_BUFFERS (3)
+#define LINE_COUNT (3)
 uint16_t* line[LINE_BUFFERS];
 QueueHandle_t spi_queue;
 QueueHandle_t line_buffer_queue;
@@ -115,7 +115,7 @@ DRAM_ATTR static const ili_init_cmd_t ili_init_cmds[] = {
     //{0x36, {(MADCTL_MV | MADCTL_MX | TFT_RGB_BGR)}, 1},    // Memory Access Control
     {0x36, {(MADCTL_MV | MADCTL_MY | TFT_RGB_BGR)}, 1},    // Memory Access Control
     {0x3A, {0x55}, 1},
-    {0xB1, {0x00, 0x1B}, 2},  // Frame Rate Control (1B=70, 1F=61, 10=119)
+    {0xB1, {0x00, 0x10}, 2},  // Frame Rate Control (1B=70, 1F=61, 10=119)
     {0xB6, {0x0A, 0xA2}, 2},    // Display Function Control
     {0xF6, {0x01, 0x30}, 2},
     {0xF2, {0x00}, 1},    // 3Gamma Function Disable
@@ -348,17 +348,36 @@ static void ili_init()
 
 void send_reset_drawing(int left, int top, int width, int height)
 {
-    ili_cmd(0x2A);
+    ili_cmd(0x2A);          //Column address set
 
-    const uint8_t data1[] = { (left) >> 8, (left) & 0xff, (left + width - 1) >> 8, (left + width - 1) & 0xff };
+    const int right = left + width - 1;
+    const uint8_t data1[] = { (left) >> 8, (left) & 0xff, right >> 8, right & 0xff };
     ili_data(data1, 4);
 
     ili_cmd(0x2B);          //Page address set
 
-    const uint8_t data2[] = { top >> 8, top & 0xff, (top + height - 1) >> 8, (top + height - 1) & 0xff };
+    const int bottom = (top + height - 1);
+    const uint8_t data2[] = { top >> 8, top & 0xff, bottom >> 8, bottom & 0xff };
     ili_data(data2, 4);
 
     ili_cmd(0x2C);           //memory write
+}
+
+void send_reset_line_column(int left, int width)
+{
+    const int right = left + width - 1;
+    const uint8_t data1[] = { (left) >> 8, (left) & 0xff, right >> 8, right & 0xff };
+
+    ili_cmd(0x2A);          //Column address set
+    ili_data(data1, 4);
+}
+
+void send_reset_line_row(int top)
+{
+    const uint8_t data2[] = { top >> 8, top & 0xff, top >> 8, top & 0xff };
+
+    ili_cmd(0x2B);          //Page address set
+    ili_data(data2, 4);
 }
 
 // static void wait_for_line_buffer()
@@ -398,6 +417,19 @@ void send_continue_line(uint16_t *line, int width, int lineCount)
     t->length = width * 2 * lineCount * 8;
     t->tx_buffer = line;
     t->user = (void*)0x81;
+    t->flags = 0;
+
+    spi_put_transaction(t);
+}
+
+void send_write_line(uint16_t *line, int width)
+{
+    ili_cmd(0x2C);  // Memory write
+
+    spi_transaction_t* t = spi_get_transaction();
+    t->length = width * 16;
+    t->tx_buffer = line;
+    t->user = (void*)0x81; // TODO: D/C needs to be 1, the 0x80 is to return the line buffer
     t->flags = 0;
 
     spi_put_transaction(t);
@@ -511,7 +543,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
 {
     short x, y;
 
-    odroid_display_lock_gb_display();
+    odroid_display_lock();
 
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
 
@@ -652,7 +684,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
 
     send_continue_wait();
 
-    odroid_display_unlock_gb_display();
+    odroid_display_unlock();
 }
 
 void ili9341_init()
@@ -811,7 +843,7 @@ void ili9341_write_frame_sms(uint8_t* buffer, uint16_t color[], uint8_t isGameGe
 {
     short x, y;
 
-    odroid_display_lock_sms_display();
+    odroid_display_lock();
 
     if (buffer == NULL)
     {
@@ -1079,7 +1111,7 @@ void ili9341_write_frame_sms(uint8_t* buffer, uint16_t color[], uint8_t isGameGe
     }
 
     send_continue_wait();
-    odroid_display_unlock_sms_display();
+    odroid_display_unlock();
 }
 
 //
@@ -1088,7 +1120,7 @@ void ili9341_write_frame_nes(uint8_t* buffer, uint16_t* myPalette, uint8_t scale
 {
     short x, y;
 
-    odroid_display_lock_nes_display();
+    odroid_display_lock();
 
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
 
@@ -1161,38 +1193,29 @@ void ili9341_write_frame_nes(uint8_t* buffer, uint16_t* myPalette, uint8_t scale
         }
         else
         {
-            send_reset_drawing((320 / 2) - (NES_GAME_WIDTH / 2), (240 / 2) - (NES_GAME_HEIGHT / 2), NES_GAME_WIDTH, NES_GAME_HEIGHT);
+            static short interlace = 0;
 
-            for (y = 0; y < NES_GAME_HEIGHT; y += LINE_COUNT)
+            int left = (320 - NES_GAME_WIDTH) / 2;
+            int top = (240 - NES_GAME_HEIGHT) / 2;
+            send_reset_line_column(left, NES_GAME_WIDTH);
+
+            for (y = interlace; y < NES_GAME_HEIGHT; y += 2)
             {
-              int linesWritten = 0;
-              uint16_t* line_buffer = line_buffer_get();
-
-              for (short i = 0; i < LINE_COUNT; ++i)
-              {
-                  if((y + i) >= NES_GAME_HEIGHT)
-                    break;
-
-                  int index = (i) * NES_GAME_WIDTH;
-                  int bufferIndex = ((y + i) * NES_GAME_WIDTH);
-
-                  for (x = 0; x < NES_GAME_WIDTH; ++x)
-                  {
-                    line_buffer[index++] = myPalette[framePtr[bufferIndex++]];
-                  }
-
-                  ++linesWritten;
-              }
-
-              // display
-              send_continue_line(line_buffer, NES_GAME_WIDTH, linesWritten);
+                uint16_t* line_buffer = line_buffer_get();
+                int bufferIndex = y * NES_GAME_WIDTH;
+                for (x = 0; x < NES_GAME_WIDTH; ++x) {
+                    line_buffer[x] = myPalette[framePtr[bufferIndex++]];
+                }
+                send_reset_line_row(top + y);
+                send_write_line(line_buffer, NES_GAME_WIDTH);
             }
+            interlace = 1 - interlace;
         }
     }
 
     send_continue_wait();
 
-    odroid_display_unlock_nes_display();
+    odroid_display_unlock();
 }
 
 // void ili9341_write_frame(uint16_t* buffer)
@@ -1416,73 +1439,26 @@ void odroid_display_show_hourglass()
 }
 
 
-SemaphoreHandle_t gb_mutex = NULL;
+SemaphoreHandle_t display_mutex = NULL;
 
-void odroid_display_lock_gb_display()
+void odroid_display_lock()
 {
-    if (!gb_mutex)
+    if (!display_mutex)
     {
-        gb_mutex = xSemaphoreCreateMutex();
-        if (!gb_mutex) abort();
+        display_mutex = xSemaphoreCreateMutex();
+        if (!display_mutex) abort();
     }
 
-    if (xSemaphoreTake(gb_mutex, 1000 / portTICK_RATE_MS) != pdTRUE)
-    {
-        abort();
-    }
-}
-
-void odroid_display_unlock_gb_display()
-{
-    if (!gb_mutex) abort();
-
-    xSemaphoreGive(gb_mutex);
-}
-
-
-SemaphoreHandle_t nes_mutex = NULL;
-
-void odroid_display_lock_nes_display()
-{
-    if (!nes_mutex)
-    {
-        nes_mutex = xSemaphoreCreateMutex();
-        if (!nes_mutex) abort();
-    }
-
-    if (xSemaphoreTake(nes_mutex, 1000 / portTICK_RATE_MS) != pdTRUE)
+    if (xSemaphoreTake(display_mutex, 1000 / portTICK_RATE_MS) != pdTRUE)
     {
         abort();
     }
 }
 
-void odroid_display_unlock_nes_display()
+void odroid_display_unlock()
 {
-    if (!nes_mutex) abort();
+    if (!display_mutex) abort();
 
-    xSemaphoreGive(nes_mutex);
+    xSemaphoreGive(display_mutex);
 }
 
-
-SemaphoreHandle_t sms_mutex = NULL;
-
-void odroid_display_lock_sms_display()
-{
-    if (!sms_mutex)
-    {
-        sms_mutex = xSemaphoreCreateMutex();
-        if (!sms_mutex) abort();
-    }
-
-    if (xSemaphoreTake(sms_mutex, 1000 / portTICK_RATE_MS) != pdTRUE)
-    {
-        abort();
-    }
-}
-
-void odroid_display_unlock_sms_display()
-{
-    if (!sms_mutex) abort();
-
-    xSemaphoreGive(sms_mutex);
-}
