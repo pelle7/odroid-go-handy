@@ -95,12 +95,12 @@ void nes_setcontext(nes_t *machine)
    nes = *machine;
 }
 
-static uint8 ram_read(uint32 address)
+static uint8 IRAM_ATTR ram_read(uint32 address)
 {
    return nes.cpu->mem_page[0][address & (NES_RAMSIZE - 1)];
 }
 
-static void ram_write(uint32 address, uint8 value)
+static void IRAM_ATTR ram_write(uint32 address, uint8 value)
 {
    nes.cpu->mem_page[0][address & (NES_RAMSIZE - 1)] = value;
 }
@@ -256,7 +256,7 @@ static void build_address_handlers(nes_t *machine)
 }
 
 /* raise an IRQ */
-void nes_irq(void)
+void IRAM_ATTR nes_irq(void)
 {
 #ifdef NOFRENDO_DEBUG
    if (nes.scanline <= NES_SCREEN_HEIGHT)

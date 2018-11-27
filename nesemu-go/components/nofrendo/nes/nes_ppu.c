@@ -289,7 +289,7 @@ static void ppu_oamdma(uint8 value)
 }
 
 /* TODO: this isn't the PPU! */
-void ppu_writehigh(uint32 address, uint8 value)
+void IRAM_ATTR ppu_writehigh(uint32 address, uint8 value)
 {
    switch (address)
    {
@@ -321,7 +321,7 @@ void ppu_writehigh(uint32 address, uint8 value)
 }
 
 /* TODO: this isn't the PPU! */
-uint8 ppu_readhigh(uint32 address)
+uint8 IRAM_ATTR ppu_readhigh(uint32 address)
 {
    uint8 value;
 
@@ -347,7 +347,7 @@ uint8 ppu_readhigh(uint32 address)
 }
 
 /* Read from $2000-$2007 */
-uint8 ppu_read(uint32 address)
+uint8 IRAM_ATTR ppu_read(uint32 address)
 {
    uint8 value;
 
@@ -406,7 +406,7 @@ uint8 ppu_read(uint32 address)
 }
 
 /* Write to $2000-$2007 */
-void ppu_write(uint32 address, uint8 value)
+void IRAM_ATTR ppu_write(uint32 address, uint8 value)
 {
    /* write goes into ppu latch... */
    ppu.latch = value;

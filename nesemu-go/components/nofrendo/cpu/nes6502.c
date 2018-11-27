@@ -1307,7 +1307,7 @@ uint8 nes6502_getbyte(uint32 address)
 }
 
 /* get number of elapsed cycles */
-uint32 nes6502_getcycles(bool reset_flag)
+uint32 IRAM_ATTR nes6502_getcycles(bool reset_flag)
 {
    uint32 cycles = cpu.total_cycles;
 
@@ -2440,7 +2440,7 @@ void nes6502_nmi(void)
 }
 
 /* Interrupt request */
-void nes6502_irq(void)
+void IRAM_ATTR nes6502_irq(void)
 {
    DECLARE_LOCAL_REGS
 
