@@ -351,8 +351,7 @@ static void system_video(bool draw)
    }
 
    /* blit the NES screen to our video surface */
-   vid_blit(nes.vidbuf, 0, (NES_SCREEN_HEIGHT - NES_VISIBLE_HEIGHT) / 2,
-            0, 0, NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT);
+   vid_swap(&nes.vidbuf);
 
    /* overlay our GUI on top of it */
    //gui_frame(true);
@@ -419,6 +418,7 @@ void nes_emulate(void)
         else
           elapsedTime = ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
 
+#if 1
         // Don't allow skipping more than one frame at a time.
         if (renderFrame && elapsedTime > frameTime) {
             renderFrame = false;
@@ -426,6 +426,7 @@ void nes_emulate(void)
         } else {
             renderFrame = true;
         }
+#endif
 
         totalElapsedTime += elapsedTime;
         ++frame;

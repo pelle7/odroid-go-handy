@@ -62,8 +62,7 @@ extern void vid_shutdown(void);
 extern int  vid_setmode(int width, int height);
 extern void vid_setpalette(rgb_t *pal);
 
-extern void vid_blit(bitmap_t *bitmap, int src_x, int src_y, int dest_x, 
-                     int dest_y, int blit_width, int blit_height);
+extern void vid_swap(bitmap_t **bitmap);
 extern void vid_flush(void);
 
 #endif /* _VID_DRV_H_ */

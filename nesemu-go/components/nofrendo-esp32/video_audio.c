@@ -245,8 +245,8 @@ static void custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects) {
         //memcpy(lcdfb, bmp->line[0], 256 * 224);
 
         //void* arg = (void*)lcdfb;
-        void* arg = (void*)bmp->line[0];
-    	xQueueSend(vidQueue, &arg, portMAX_DELAY);
+        void* arg = (void*)bmp;
+        xQueueSend(vidQueue, &arg, portMAX_DELAY);
     }
 }
 
@@ -254,27 +254,33 @@ static void custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects) {
 //This runs on core 1.
 volatile bool exitVideoTaskFlag = false;
 static void videoTask(void *arg) {
-    uint8_t* bmp = NULL;
+    void* data = NULL;
 
-    while(1)
-	{
-		xQueuePeek(vidQueue, &bmp, portMAX_DELAY);
+    while(!exitVideoTaskFlag)
+    {
+        xQueuePeek(vidQueue, &data, portMAX_DELAY);
 
-        if (bmp == 1) break;
+        bitmap_t *bmp = (bitmap_t*)data;
+        if (!bmp) {
+            continue;
+        }
 
         if (previous_scaling_enabled != scaling_enabled)
         {
             // Clear display
-            ili9341_write_frame_nes(NULL, NULL, true);
+            ili9341_blank_screen();
             previous_scaling_enabled = scaling_enabled;
         }
 
-        ili9341_write_frame_nes(bmp, myPalette, scaling_enabled);
+        int voverdraw = (NES_SCREEN_HEIGHT - NES_VISIBLE_HEIGHT);
+        ili9341_write_frame_8bit(bmp->line[voverdraw / 2],
+                                 bmp->width, bmp->height - voverdraw,
+                                 bmp->pitch, myPalette, scaling_enabled);
 
         odroid_input_battery_level_read(&battery);
 
-		xQueueReceive(vidQueue, &bmp, portMAX_DELAY);
-	}
+        xQueueReceive(vidQueue, &data, portMAX_DELAY);
+    }
 
 
     odroid_display_lock();
@@ -284,7 +290,7 @@ static void videoTask(void *arg) {
     odroid_display_unlock();
     //odroid_display_drain_spi();
 
-    exitVideoTaskFlag = true;
+    exitVideoTaskFlag = false;
 
     vTaskDelete(NULL);
 
@@ -318,16 +324,14 @@ static void SaveState()
 
 static void PowerDown()
 {
-    uint16_t* param = 1;
-
     // Clear audio to prevent studdering
     odroid_audio_terminate();
 
     // Stop tasks
     printf("PowerDown: stopping tasks.\n");
 
-    xQueueSend(vidQueue, &param, portMAX_DELAY);
-    while (!exitVideoTaskFlag) { vTaskDelay(1); }
+    exitVideoTaskFlag = true;
+    while (exitVideoTaskFlag) { vTaskDelay(10); }
 
 
     // state
@@ -430,8 +434,7 @@ static int ConvertJoystickInput()
 
         printf("Stopping video queue.\n");
 
-        void* arg = 1;
-        xQueueSend(vidQueue, &arg, portMAX_DELAY);
+        exitVideoTaskFlag = true;
         while(exitVideoTaskFlag)
         {
              vTaskDelay(10);
@@ -539,7 +542,7 @@ int osd_init()
     ignoreMenuButton = previousJoystickState.values[ODROID_INPUT_MENU];
 
 
-	ili9341_write_frame_nes(NULL, NULL, true);
+    ili9341_blank_screen();
 
 
 	vidQueue=xQueueCreate(1, sizeof(bitmap_t *));
