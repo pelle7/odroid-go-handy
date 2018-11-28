@@ -1077,13 +1077,13 @@ void IRAM_ATTR ppu_endscanline(int scanline)
    }
 }
 
-void ppu_checknmi(void)
+void IRAM_ATTR ppu_checknmi(void)
 {
    if (ppu.ctrl0 & PPU_CTRL0F_NMI)
       nes_nmi();
 }
 
-void ppu_scanline(bitmap_t *bmp, int scanline, bool draw_flag)
+void IRAM_ATTR ppu_scanline(bitmap_t *bmp, int scanline, bool draw_flag)
 {
    if (scanline < 240)
    {

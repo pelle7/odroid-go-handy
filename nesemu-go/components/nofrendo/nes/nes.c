@@ -297,7 +297,7 @@ INLINE void nes_checkfiq(int cycles)
    }
 }
 
-void nes_nmi(void)
+void IRAM_ATTR nes_nmi(void)
 {
    nes6502_nmi();
 }
@@ -367,7 +367,7 @@ extern void do_audio_frame();
 extern bool forceConsoleReset;
 
 /* main emulation loop */
-void nes_emulate(void)
+void IRAM_ATTR nes_emulate(void)
 {
    int last_ticks, frames_to_render;
 

@@ -2426,7 +2426,7 @@ void nes6502_reset(void)
    uint8 d_flag, i_flag, z_flag, c_flag;
 
 /* Non-maskable interrupt */
-void nes6502_nmi(void)
+void IRAM_ATTR nes6502_nmi(void)
 {
    DECLARE_LOCAL_REGS
 
