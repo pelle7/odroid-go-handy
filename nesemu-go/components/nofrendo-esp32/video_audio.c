@@ -255,6 +255,7 @@ static void custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects) {
 volatile bool exitVideoTaskFlag = false;
 static void videoTask(void *arg) {
     void* data = NULL;
+    uint8_t *old_buffer = NULL;
 
     while(!exitVideoTaskFlag)
     {
@@ -273,9 +274,10 @@ static void videoTask(void *arg) {
         }
 
         int voverdraw = (NES_SCREEN_HEIGHT - NES_VISIBLE_HEIGHT);
-        ili9341_write_frame_8bit(bmp->line[voverdraw / 2],
+        ili9341_write_frame_8bit(bmp->line[voverdraw / 2], old_buffer,
                                  bmp->width, bmp->height - voverdraw,
                                  bmp->pitch, myPalette, scaling_enabled);
+        old_buffer = bmp->line[voverdraw / 2];
 
         odroid_input_battery_level_read(&battery);
 

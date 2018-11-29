@@ -34,17 +34,11 @@
 #include <gui.h>
 #include <osd.h>
 
-#define DOUBLE_BUFFER 0
-
 /* hardware surface */
 static bitmap_t *screen = NULL;
 
 /* primary / backbuffer surfaces */
 static bitmap_t *primary_buffer = NULL;
-
-#if DOUBLE_BUFFER
-static bitmap_t *back_buffer = NULL;
-#endif
 
 static viddriver_t *driver = NULL;
 
@@ -148,7 +142,6 @@ void vid_swap(bitmap_t **bitmap)
    {
       primary_buffer = bmp_create((*bitmap)->width, (*bitmap)->height,
                                   ((*bitmap)->pitch - (*bitmap)->width) / 2);
-      bmp_clear(primary_buffer, GUI_BLACK);
    }
    bitmap_t *temp = primary_buffer;
    primary_buffer = *bitmap;
@@ -375,10 +368,6 @@ void vid_shutdown(void)
 
    if (NULL != primary_buffer)
       bmp_destroy(&primary_buffer);
-#if DOUBLE_BUFFER
-   if (NULL != back_buffer)
-      bmp_destroy(&back_buffer);
-#endif
 
    if (driver && driver->shutdown)
       driver->shutdown();

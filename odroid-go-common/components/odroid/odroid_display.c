@@ -36,8 +36,8 @@ static spi_transaction_t trans[SPI_TRANSACTION_COUNT];
 static spi_device_handle_t spi;
 
 
-#define LINE_BUFFERS (3)
-#define LINE_COUNT (3)
+#define LINE_BUFFERS (10)
+#define LINE_COUNT (1)
 uint16_t* line[LINE_BUFFERS];
 QueueHandle_t spi_queue;
 QueueHandle_t line_buffer_queue;
@@ -426,7 +426,7 @@ void send_write_line(uint16_t *line, int width)
     ili_cmd(0x2C);  // Memory write
 
     spi_transaction_t* t = spi_get_transaction();
-    t->length = width * 16;
+    t->length = width * 2 * 8;
     t->tx_buffer = line;
     t->user = (void*)0x81; // TODO: D/C needs to be 1, the 0x80 is to return the line buffer
     t->flags = 0;
@@ -1138,11 +1138,31 @@ void ili9341_blank_screen()
     odroid_display_unlock();
 }
 
-void ili9341_write_frame_8bit(uint8_t* buffer, int width, int height,
-                              int stride, uint16_t* palette, uint8_t scale)
+static inline void
+write_partial_line(uint8_t *buffer, uint16_t *palette,
+                   int *last_left, int *last_width,
+                   int left, int width,
+                   int bufferIndex)
 {
-    int x, y;
+    if (*last_left != left || *last_width != width) {
+        *last_left = left;
+        *last_width = width;
+        send_reset_line_column(left, width);
+    }
 
+    uint16_t* line_buffer = line_buffer_get();
+    for (int j = 0; j < width; ++j) {
+        line_buffer[j] = palette[buffer[bufferIndex++]];
+    }
+
+    send_write_line(line_buffer, width);
+}
+
+void
+ili9341_write_frame_8bit(uint8_t* buffer, uint8_t *old_buffer,
+                         int width, int height, int stride,
+                         uint16_t* palette, uint8_t scale)
+{
     if (!buffer) {
         ili9341_blank_screen();
         return;
@@ -1152,76 +1172,43 @@ void ili9341_write_frame_8bit(uint8_t* buffer, int width, int height,
 
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
 
-#if 0
-    if (scale)
+    int origin_x = (SCREEN_WIDTH - width) / 2;
+    int origin_y = (SCREEN_HEIGHT - height) / 2;
+    int last_left = -1;
+    int last_width = -1;
+    int lines_written = 0;
+
+    for (int y = 0, i = 0; y < height; ++y, i += stride)
     {
-        const uint16_t displayWidth = 320 - 10;
-        const uint16_t top = (240 - NES_GAME_HEIGHT) / 2;
+        int left, line_width;
 
-        send_reset_drawing((320 / 2) - (displayWidth / 2), top, displayWidth, NES_GAME_HEIGHT);
-
-        for (y = 0; y < NES_GAME_HEIGHT; y += LINE_COUNT)
-        {
-          int linesWritten = 0;
-          uint16_t* line_buffer = line_buffer_get();
-
-          for (short i = 0; i < LINE_COUNT; ++i)
-          {
-              if((y + i) >= NES_GAME_HEIGHT)
-                break;
-
-              int index = (i) * displayWidth;
-
-              int bufferIndex = ((y + i) * NES_GAME_WIDTH) + 4;
-
-              uint16_t samples[4];
-              for (x = 4; x < NES_GAME_WIDTH - 4; x += 4)
-              {
-                for (short j = 0; j < 4; ++j)
-                {
-                    uint8_t val = buffer[bufferIndex++];
-                    samples[j] = palette[val];
+        if (old_buffer) {
+            left = width;
+            line_width = 0;
+            for (int x = 0; x < width; ++x) {
+                if (buffer[i + x] != old_buffer[i + x]) {
+                    if (x < left) {
+                        left = x;
+                    }
+                    line_width = (x - left) + 1;
                 }
-
-                uint16_t mid = Blend(samples[1] >> 8 | samples[1] << 8, samples[2] >> 8 | samples[2] << 8);
-
-                line_buffer[index++] = samples[0];
-                line_buffer[index++] = samples[1];
-                line_buffer[index++] = mid >> 8 | mid << 8;
-                line_buffer[index++] = samples[2];
-                line_buffer[index++] = samples[3];
-              }
-
-              ++linesWritten;
-          }
-
-          // display
-          send_continue_line(line_buffer, displayWidth, linesWritten);
-        }
-    }
-    else
-#endif
-    {
-        static short interlace = 0;
-
-        int left = (SCREEN_WIDTH - width) / 2;
-        int top = (SCREEN_HEIGHT - height) / 2;
-        send_reset_line_column(left, width);
-
-        for (y = interlace; y < height; y += 2)
-        {
-            uint16_t* line_buffer = line_buffer_get();
-            int bufferIndex = y * stride;
-            for (x = 0; x < width; ++x) {
-                line_buffer[x] = palette[buffer[bufferIndex++]];
             }
-            send_reset_line_row(top + y);
-            send_write_line(line_buffer, width);
+        } else {
+            left = 0;
+            line_width = width;
         }
-        interlace = 1 - interlace;
+
+        if (line_width > 0) {
+            send_reset_line_row(origin_y + y);
+            write_partial_line(buffer, palette, &last_left, &last_width,
+                               origin_x + left, line_width, i + left);
+            ++lines_written;
+        }
     }
 
-    send_continue_wait();
+    if (lines_written > 0) {
+        send_continue_wait();
+    }
 
     odroid_display_unlock();
 }
