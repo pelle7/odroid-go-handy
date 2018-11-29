@@ -1160,7 +1160,7 @@ write_partial_line(uint8_t *buffer, uint16_t *palette,
 
 void
 ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
-                         int width, int height, int stride,
+                         short width, short height, short stride,
                          uint16_t* palette, uint8_t scale)
 {
     if (!buffer) {
@@ -1449,18 +1449,21 @@ void odroid_display_unlock()
     xSemaphoreGive(display_mutex);
 }
 
-void IRAM_ATTR
+int IRAM_ATTR
 odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
-                   int width, int height, int stride,
+                   short width, short height, short stride,
                    odroid_scanline *out_diff)
 {
+   int diff_size = 0;
    if (!old_buffer) {
+      diff_size = width * height;
       for (int y = 0; y < height; ++y) {
          out_diff[y].left = 0;
          out_diff[y].width = width;
       }
    } else {
-      for (int y = 0, i = 0; y < height; ++y, i += stride) {
+      int i = 0;
+      for (short y = 0; y < height; ++y, i += stride) {
          out_diff[y].left = width;
          out_diff[y].width = 0;
          for (int x = 0; x < width; ++x) {
@@ -1474,7 +1477,10 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
                   out_diff[y].width = scan_width;
             }
          }
+         diff_size += out_diff[y].width;
       }
    }
+
+   return diff_size;
 }
 

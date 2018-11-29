@@ -25,7 +25,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale);
 
 void backlight_percentage_set(int value);
 //void ili9341_write_frame(uint16_t* buffer);
-void ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline* diff, int width, int height, int stride, uint16_t* palette, uint8_t scale);
+void ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline* diff, short width, short height, short stride, uint16_t* palette, uint8_t scale);
 void ili9341_write_frame_rectangle(short left, short top, short width, short height, uint16_t* buffer);
 void ili9341_clear(uint16_t color);
 void ili9341_blank_screen();
@@ -39,4 +39,4 @@ void odroid_display_lock();
 void odroid_display_unlock();
 void odroid_display_show_sderr(int errNum);
 void odroid_display_show_hourglass();
-void odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer, int width, int height, int stride, odroid_scanline *out_diff);
+int odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer, short width, short height, short stride, odroid_scanline *out_diff);
