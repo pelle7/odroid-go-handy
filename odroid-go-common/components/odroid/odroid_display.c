@@ -1159,7 +1159,7 @@ write_partial_line(uint8_t *buffer, uint16_t *palette,
 }
 
 void
-ili9341_write_frame_8bit(uint8_t* buffer, uint8_t *old_buffer,
+ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
                          int width, int height, int stride,
                          uint16_t* palette, uint8_t scale)
 {
@@ -1182,17 +1182,9 @@ ili9341_write_frame_8bit(uint8_t* buffer, uint8_t *old_buffer,
     {
         int left, line_width;
 
-        if (old_buffer) {
-            left = width;
-            line_width = 0;
-            for (int x = 0; x < width; ++x) {
-                if (buffer[i + x] != old_buffer[i + x]) {
-                    if (x < left) {
-                        left = x;
-                    }
-                    line_width = (x - left) + 1;
-                }
-            }
+        if (diff) {
+            left = (int)diff[y].left;
+            line_width = (int)diff[y].width;
         } else {
             left = 0;
             line_width = width;
