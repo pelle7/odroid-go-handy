@@ -57,6 +57,12 @@
 #define  DEFAULT_WIDTH        256
 #define  DEFAULT_HEIGHT       NES_VISIBLE_HEIGHT
 
+struct bitmap_meta {
+    odroid_scanline diff[NES_VISIBLE_HEIGHT];
+    uint8_t *buffer;
+    int stride;
+};
+
 odroid_volume_level Volume;
 odroid_battery_state battery;
 int scaling_enabled = 1;
@@ -203,13 +209,9 @@ uint16 myPalette[256];
 /* copy nes palette over to hardware */
 static void set_palette(rgb_t *pal)
 {
-	uint16 c;
-
-   int i;
-
-   for (i = 0; i < 256; i++)
+   for (int i = 0; i < 256; i++)
    {
-      c=(pal[i].b>>3)+((pal[i].g>>2)<<5)+((pal[i].r>>3)<<11);
+      uint16_t c=(pal[i].b>>3)+((pal[i].g>>2)<<5)+((pal[i].r>>3)<<11);
       myPalette[i]=(c>>8)|((c&0xff)<<8);
       //myPalette[i]= c;
    }
@@ -238,16 +240,51 @@ static void free_write(int num_dirties, rect_t *dirty_rects)
    bmp_destroy(&myBitmap);
 }
 
-//static uint8_t lcdfb[256 * 224];
-static void custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects) {
-    if (bmp->line[0] != NULL)
-    {
-        //memcpy(lcdfb, bmp->line[0], 256 * 224);
+static uint8_t *old_buffer = NULL;
+static struct bitmap_meta update1 = {0,};
+static struct bitmap_meta update2 = {0,};
+static struct bitmap_meta *update = &update1;
+#define NES_VERTICAL_OVERDRAW (NES_SCREEN_HEIGHT-NES_VISIBLE_HEIGHT)
 
-        //void* arg = (void*)lcdfb;
-        void* arg = (void*)bmp;
-        xQueueSend(vidQueue, &arg, portMAX_DELAY);
-    }
+static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects) {
+   if (!bmp) {
+      return;
+   }
+
+   update->buffer = bmp->line[NES_VERTICAL_OVERDRAW/2];
+   update->stride = bmp->pitch;
+
+   if (!old_buffer) {
+      for (int y = 0; y < NES_VISIBLE_HEIGHT; ++y) {
+         update->diff[y].left = 0;
+         update->diff[y].width = NES_SCREEN_WIDTH;
+      }
+   } else {
+      for (int y = 0, i = 0; y < NES_VISIBLE_HEIGHT; ++y, i += update->stride) {
+         update->diff[y].left = NES_SCREEN_WIDTH;
+         update->diff[y].width = 0;
+         for (int x = 0; x < NES_SCREEN_WIDTH; ++x) {
+            int idx = i + x;
+            if (old_buffer[idx] != update->buffer[idx]) {
+               if (x < update->diff[y].left)
+                  update->diff[y].left = x;
+
+               int width = (x - update->diff[y].left) + 1;
+               if (width > update->diff[y].width)
+                  update->diff[y].width = width;
+            }
+         }
+      }
+   }
+
+   old_buffer = update->buffer;
+
+   void* arg = (void*)update;
+   xQueueSend(vidQueue, &arg, portMAX_DELAY);
+
+   // Flip the update struct so we don't start writing into it while the
+   // second core is still updating the screen.
+   update = (update == &update1) ? &update2 : &update1;
 }
 
 
@@ -255,16 +292,16 @@ static void custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects) {
 volatile bool exitVideoTaskFlag = false;
 static void videoTask(void *arg) {
     void* data = NULL;
-    uint8_t *old_buffer = NULL;
 
     while(!exitVideoTaskFlag)
     {
         xQueuePeek(vidQueue, &data, portMAX_DELAY);
 
-        bitmap_t *bmp = (bitmap_t*)data;
-        if (!bmp) {
+        if (!data) {
             continue;
         }
+
+        struct bitmap_meta *update = data;
 
         if (previous_scaling_enabled != scaling_enabled)
         {
@@ -273,11 +310,9 @@ static void videoTask(void *arg) {
             previous_scaling_enabled = scaling_enabled;
         }
 
-        int voverdraw = (NES_SCREEN_HEIGHT - NES_VISIBLE_HEIGHT);
-        ili9341_write_frame_8bit(bmp->line[voverdraw / 2], old_buffer,
-                                 bmp->width, bmp->height - voverdraw,
-                                 bmp->pitch, myPalette, scaling_enabled);
-        old_buffer = bmp->line[voverdraw / 2];
+        ili9341_write_frame_8bit(update->buffer, update->diff,
+                                 NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
+                                 update->stride, myPalette, scaling_enabled);
 
         odroid_input_battery_level_read(&battery);
 
@@ -286,9 +321,7 @@ static void videoTask(void *arg) {
 
 
     odroid_display_lock();
-
     odroid_display_show_hourglass();
-
     odroid_display_unlock();
     //odroid_display_drain_spi();
 
@@ -528,29 +561,29 @@ bool forceConsoleReset = false;
 
 int osd_init()
 {
-	log_chain_logfunc(logprint);
+   log_chain_logfunc(logprint);
 
-	if (osd_init_sound())
-    {
-        abort();
-    }
-
-
-    Volume = odroid_settings_Volume_get();
-
-    scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_NES) ? false : true;
-
-    previousJoystickState = odroid_input_read_raw();
-    ignoreMenuButton = previousJoystickState.values[ODROID_INPUT_MENU];
+   if (osd_init_sound())
+   {
+      abort();
+   }
 
 
-    ili9341_blank_screen();
+   Volume = odroid_settings_Volume_get();
+
+   scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_NES) ? false : true;
+
+   previousJoystickState = odroid_input_read_raw();
+   ignoreMenuButton = previousJoystickState.values[ODROID_INPUT_MENU];
 
 
-	vidQueue=xQueueCreate(1, sizeof(bitmap_t *));
-	xTaskCreatePinnedToCore(&videoTask, "videoTask", 2048, NULL, 5, NULL, 1);
+   ili9341_blank_screen();
 
-    osd_initinput();
 
-	return 0;
+   vidQueue = xQueueCreate(1, sizeof(struct bitmap_meta *));
+   xTaskCreatePinnedToCore(&videoTask, "videoTask", 2048, NULL, 5, NULL, 1);
+
+   osd_initinput();
+
+   return 0;
 }
