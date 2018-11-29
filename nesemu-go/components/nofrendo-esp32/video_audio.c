@@ -254,28 +254,9 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
    update->buffer = bmp->line[NES_VERTICAL_OVERDRAW/2];
    update->stride = bmp->pitch;
 
-   if (!old_buffer) {
-      for (int y = 0; y < NES_VISIBLE_HEIGHT; ++y) {
-         update->diff[y].left = 0;
-         update->diff[y].width = NES_SCREEN_WIDTH;
-      }
-   } else {
-      for (int y = 0, i = 0; y < NES_VISIBLE_HEIGHT; ++y, i += update->stride) {
-         update->diff[y].left = NES_SCREEN_WIDTH;
-         update->diff[y].width = 0;
-         for (int x = 0; x < NES_SCREEN_WIDTH; ++x) {
-            int idx = i + x;
-            if (old_buffer[idx] != update->buffer[idx]) {
-               if (x < update->diff[y].left)
-                  update->diff[y].left = x;
-
-               int width = (x - update->diff[y].left) + 1;
-               if (width > update->diff[y].width)
-                  update->diff[y].width = width;
-            }
-         }
-      }
-   }
+   odroid_buffer_diff(update->buffer, old_buffer,
+                      NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
+                      update->stride, update->diff);
 
    old_buffer = update->buffer;
 

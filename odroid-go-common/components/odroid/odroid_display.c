@@ -1449,3 +1449,32 @@ void odroid_display_unlock()
     xSemaphoreGive(display_mutex);
 }
 
+void IRAM_ATTR
+odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
+                   int width, int height, int stride,
+                   odroid_scanline *out_diff)
+{
+   if (!old_buffer) {
+      for (int y = 0; y < height; ++y) {
+         out_diff[y].left = 0;
+         out_diff[y].width = width;
+      }
+   } else {
+      for (int y = 0, i = 0; y < height; ++y, i += stride) {
+         out_diff[y].left = width;
+         out_diff[y].width = 0;
+         for (int x = 0; x < width; ++x) {
+            int idx = i + x;
+            if (old_buffer[idx] != buffer[idx]) {
+               if (x < out_diff[y].left)
+                  out_diff[y].left = x;
+
+               int scan_width = (x - out_diff[y].left) + 1;
+               if (scan_width > out_diff[y].width)
+                  out_diff[y].width = scan_width;
+            }
+         }
+      }
+   }
+}
+
