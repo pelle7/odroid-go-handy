@@ -359,15 +359,15 @@ static void SaveState()
 
 static void PowerDown()
 {
-    // Clear audio to prevent studdering
-    odroid_audio_terminate();
-
     // Stop tasks
     printf("PowerDown: stopping tasks.\n");
 
     exitVideoTaskFlag = true;
     while (exitVideoTaskFlag) { vTaskDelay(10); }
 
+
+    // Clear audio to prevent studdering
+    odroid_audio_terminate();
 
     // state
     printf("PowerDown: Saving state.\n");
@@ -465,15 +465,12 @@ static int ConvertJoystickInput()
 
     if (!ignoreMenuButton && previousJoystickState.values[ODROID_INPUT_MENU] && !state.values[ODROID_INPUT_MENU])
     {
-        odroid_audio_terminate();
-
         printf("Stopping video queue.\n");
 
         exitVideoTaskFlag = true;
-        while(exitVideoTaskFlag)
-        {
-             vTaskDelay(10);
-        }
+        while(exitVideoTaskFlag) { vTaskDelay(10); }
+
+        odroid_audio_terminate();
 
         //odroid_display_drain_spi();
 
