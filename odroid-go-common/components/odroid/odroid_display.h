@@ -39,3 +39,4 @@ void odroid_display_lock();
 void odroid_display_unlock();
 void odroid_display_show_sderr(int errNum);
 void odroid_display_show_hourglass();
+void odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer, int width, int height, int stride, odroid_scanline *out_diff);
