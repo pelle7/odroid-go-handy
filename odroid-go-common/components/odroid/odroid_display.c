@@ -1445,69 +1445,64 @@ void odroid_display_unlock()
     xSemaphoreGive(display_mutex);
 }
 
-int IRAM_ATTR
+void IRAM_ATTR
 odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
                    short width, short height, short stride,
                    odroid_scanline *out_diff)
 {
-   int diff_size = 0;
-   if (!old_buffer) {
-      diff_size = width * height;
-      out_diff[0].left = 0;
-      out_diff[0].width = width;
-      out_diff[0].repeat = height;
-   } else {
-      int i = 0;
-      for (short y = 0; y < height; ++y, i += stride) {
-         out_diff[y].left = width;
-         out_diff[y].width = 0;
-         out_diff[y].repeat = 1;
-         for (int x = 0; x < width; ++x) {
-            int idx = i + x;
-            if (old_buffer[idx] != buffer[idx]) {
-               if (x < out_diff[y].left)
-                  out_diff[y].left = x;
+    if (!old_buffer) {
+        out_diff[0].left = 0;
+        out_diff[0].width = width;
+        out_diff[0].repeat = height;
+    } else {
+        int i = 0;
+        for (short y = 0; y < height; ++y, i += stride) {
+            out_diff[y].left = width;
+            out_diff[y].width = 0;
+            out_diff[y].repeat = 1;
+            for (int x = 0; x < width; ++x) {
+                int idx = i + x;
+                if (old_buffer[idx] != buffer[idx]) {
+                    if (x < out_diff[y].left)
+                      out_diff[y].left = x;
 
-               int scan_width = (x - out_diff[y].left) + 1;
-               if (scan_width > out_diff[y].width)
-                  out_diff[y].width = scan_width;
+                    int scan_width = (x - out_diff[y].left) + 1;
+                    if (scan_width > out_diff[y].width)
+                      out_diff[y].width = scan_width;
+                }
             }
-         }
-         diff_size += out_diff[y].width;
-      }
+        }
 
-   }
+        // Run through and count how many lines each particular run has
+        // so that we can optimise and use write_continue and save on SPI
+        // bandwidth.
+        // If a scanline is within a couple of pixels, we merge them as the
+        // cost of sending the extra setup commands is about that much.
+        for (short y = height - 1; y > 0; --y) {
+            int left_diff = out_diff[y].left - out_diff[y-1].left;
+            if (abs(left_diff) > 1) continue;
 
-   return diff_size;
-}
+            int right = out_diff[y].left + out_diff[y].width;
+            int right_prev = out_diff[y-1].left + out_diff[y-1].width;
+            int right_diff = right - right_prev;
+            if (abs(right_diff) > 1) continue;
 
-void IRAM_ATTR
-odroid_buffer_diff_optimize(uint8_t *buffer, uint8_t *old_buffer,
-                            short width, short height, short stride,
-                            odroid_scanline *out_diff)
-{
-    // We return an optimised diff above when there's no old buffer
-    if (!old_buffer) return;
-
-    // Run through and count how many lines each particular run has
-    // so that we can optimise and use write_continue and save on SPI
-    // bandwidth.
-    // If a scanline is within a couple of pixels, we merge them as the
-    // cost of sending the extra setup commands is about that much.
-    for (short y = height - 1; y > 0; --y) {
-        int left_diff = out_diff[y].left - out_diff[y-1].left;
-        if (abs(left_diff) > 1) continue;
-
-        int right = out_diff[y].left + out_diff[y].width;
-        int right_prev = out_diff[y-1].left + out_diff[y-1].width;
-        int right_diff = right - right_prev;
-        if (abs(right_diff) > 1) continue;
-
-        if (out_diff[y].left < out_diff[y-1].left)
-            out_diff[y-1].left = out_diff[y].left;
-        out_diff[y-1].width = (right > right_prev) ?
-            right - out_diff[y-1].left : right_prev - out_diff[y-1].left;
-        out_diff[y-1].repeat = out_diff[y].repeat + 1;
+            if (out_diff[y].left < out_diff[y-1].left)
+              out_diff[y-1].left = out_diff[y].left;
+            out_diff[y-1].width = (right > right_prev) ?
+              right - out_diff[y-1].left : right_prev - out_diff[y-1].left;
+            out_diff[y-1].repeat = out_diff[y].repeat + 1;
+        }
     }
 }
 
+int IRAM_ATTR
+odroid_buffer_diff_count(odroid_scanline *diff, short height)
+{
+    int n_pixels = 0;
+    for (short y = 0; y < height;) {
+        n_pixels += diff[y].width * diff[y].repeat;
+        y += diff[y].repeat;
+    }
+    return n_pixels;
+}

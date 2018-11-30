@@ -204,12 +204,12 @@ static int set_mode(int width, int height)
    return 0;
 }
 
-uint16 myPalette[256];
+uint16 myPalette[192];
 
 /* copy nes palette over to hardware */
 static void set_palette(rgb_t *pal)
 {
-   for (int i = 0; i < 256; i++)
+   for (int i = 0; i < 192; i++)
    {
       uint16_t c=(pal[i].b>>3)+((pal[i].g>>2)<<5)+((pal[i].r>>3)<<11);
       myPalette[i]=(c>>8)|((c&0xff)<<8);
@@ -257,28 +257,34 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
    update->buffer = bmp->line[NES_VERTICAL_OVERDRAW/2];
    update->stride = bmp->pitch;
 
-   int n_pixels = odroid_buffer_diff(update->buffer, old_buffer,
-                                     NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
-                                     update->stride, update->diff);
+   odroid_buffer_diff(update->buffer, old_buffer,
+                      NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
+                      update->stride, update->diff);
 
-   // If fast is true, interlace output. Because SPI is so slow, we save
-   // considerable time by cutting down how much data we send while updating
-   // the screen. We try to avoid this unless it's not necessary.
+#if 0
+   // Because SPI is so slow, we save considerable time by cutting down how
+   // much data we send while updating the screen. If we know the next screen
+   // update will go over-budget, fall back to interlacing so that we might
+   // avoid skipping a frame
+
+   int n_pixels = old_buffer ?
+      odroid_buffer_diff_count(update->diff, NES_VISIBLE_HEIGHT) : 0;
+
    if (old_buffer && n_pixels > INTERLACE_THRESHOLD) {
-      int i = interlace * update->stride;
-      for (short y = interlace; y < NES_VISIBLE_HEIGHT;
-           y += 2, i += update->stride * 2)
+      for (short y = 0; y < NES_VISIBLE_HEIGHT; ++y)
       {
-         int idx = i + update->diff[y].left;
-         memcpy(&update->buffer[idx], &old_buffer[idx], update->diff[y].width);
-         update->diff[y].width = 0;
+         update->diff[y].repeat = 1;
+         if ((y + interlace) % 2)
+         {
+            int idx = y * update->stride + update->diff[y].left;
+            memcpy(&update->buffer[idx], &old_buffer[idx], update->diff[y].width);
+            //memset(&update->buffer[idx], 193, update->diff[y].width);
+            update->diff[y].width = 0;
+         }
       }
       interlace = 1 - interlace;
    }
-
-   odroid_buffer_diff_optimize(update->buffer, old_buffer,
-                               NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
-                               update->stride, update->diff);
+#endif
 
    old_buffer = update->buffer;
 
