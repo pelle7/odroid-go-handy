@@ -10,12 +10,13 @@ enum ODROID_SD_ERR {
 typedef struct __attribute__((__packed__)) {
     short left;
     short width;
+    short repeat;
 } odroid_scanline;
 
 void ili9341_init();
 void ili9341_poweroff();
 void ili9341_prepare();
-void send_reset_drawing(int left, int top, int width, int height);
+void send_reset_drawing(int left, int top, int width, int height, int cont);
 void send_continue_wait();
 void send_continue_line(uint16_t *line, int width, int lineCount);
 
@@ -40,3 +41,4 @@ void odroid_display_unlock();
 void odroid_display_show_sderr(int errNum);
 void odroid_display_show_hourglass();
 int odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer, short width, short height, short stride, odroid_scanline *out_diff);
+void odroid_buffer_diff_optimize(uint8_t *buffer, uint8_t *old_buffer, short width, short height, short stride, odroid_scanline *out_diff);

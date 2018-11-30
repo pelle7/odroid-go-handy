@@ -276,6 +276,10 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
       interlace = 1 - interlace;
    }
 
+   odroid_buffer_diff_optimize(update->buffer, old_buffer,
+                               NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
+                               update->stride, update->diff);
+
    old_buffer = update->buffer;
 
    void* arg = (void*)update;

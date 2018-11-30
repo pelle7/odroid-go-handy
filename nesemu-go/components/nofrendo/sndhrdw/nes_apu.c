@@ -266,7 +266,7 @@ INLINE int32 apu_rectangle_##ch(void) \
 
 #else /* !APU_OVERSAMPLE */
 #define  APU_MAKE_RECTANGLE(ch) \
-static int32 apu_rectangle_##ch(void) \
+INLINE int32 apu_rectangle_##ch(void) \
 { \
    int32 output; \
 \
