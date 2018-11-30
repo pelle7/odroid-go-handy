@@ -36,8 +36,8 @@ static spi_transaction_t trans[SPI_TRANSACTION_COUNT];
 static spi_device_handle_t spi;
 
 
-#define LINE_BUFFERS (10)
-#define LINE_COUNT (1)
+#define LINE_BUFFERS (2)
+#define LINE_COUNT (5)
 uint16_t* line[LINE_BUFFERS];
 QueueHandle_t spi_queue;
 QueueHandle_t line_buffer_queue;
@@ -345,7 +345,7 @@ static void ili_init()
 }
 
 
-void send_reset_drawing(int left, int top, int width, int height)
+void send_reset_drawing(int left, int top, int width, int height, int cont)
 {
     ili_cmd(0x2A);          //Column address set
 
@@ -359,24 +359,9 @@ void send_reset_drawing(int left, int top, int width, int height)
     const uint8_t data2[] = { top >> 8, top & 0xff, bottom >> 8, bottom & 0xff };
     ili_data(data2, 4);
 
-    ili_cmd(0x2C);           //memory write
-}
-
-void send_reset_line_column(int left, int width)
-{
-    const int right = left + width - 1;
-    const uint8_t data1[] = { (left) >> 8, (left) & 0xff, right >> 8, right & 0xff };
-
-    ili_cmd(0x2A);          //Column address set
-    ili_data(data1, 4);
-}
-
-void send_reset_line_row(int top)
-{
-    const uint8_t data2[] = { top >> 8, top & 0xff, top >> 8, top & 0xff };
-
-    ili_cmd(0x2B);          //Page address set
-    ili_data(data2, 4);
+    if (cont) {
+        ili_cmd(0x2C);           //memory write
+    }
 }
 
 // static void wait_for_line_buffer()
@@ -555,7 +540,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
         }
 
         // clear the screen
-        send_reset_drawing(0, 0, 320, 240);
+        send_reset_drawing(0, 0, 320, 240, 1);
 
         for (y = 0; y < 240; y += LINE_COUNT)
         {
@@ -573,7 +558,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
             const short outputWidth = 265;
             const short outputHeight = 240;
 
-            send_reset_drawing(26, 0, outputWidth, outputHeight);
+            send_reset_drawing(26, 0, outputWidth, outputHeight, 1);
 
             for (y = 0; y < GAMEBOY_HEIGHT; y += 3)
             {
@@ -652,7 +637,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
             send_reset_drawing((320 / 2) - (GAMEBOY_WIDTH / 2),
                 (240 / 2) - (GAMEBOY_HEIGHT / 2),
                 GAMEBOY_WIDTH,
-                GAMEBOY_HEIGHT);
+                GAMEBOY_HEIGHT, 1);
 
             for (y = 0; y < GAMEBOY_HEIGHT; y += LINE_COUNT)
             {
@@ -853,7 +838,7 @@ void ili9341_write_frame_sms(uint8_t* buffer, uint16_t color[], uint8_t isGameGe
         }
 
         // clear the screen
-        send_reset_drawing(0, 0, 320, 240);
+        send_reset_drawing(0, 0, 320, 240, 1);
 
         for (y = 0; y < 240; y += LINE_COUNT)
         {
@@ -874,10 +859,10 @@ void ili9341_write_frame_sms(uint8_t* buffer, uint16_t color[], uint8_t isGameGe
                 // const uint16_t displayWidth = 320 - (xOffset / 4 * 5);
                 // const short centerX = (320 - displayWidth) >> 1;
 
-                //send_reset_drawing(centerX, 0, displayWidth, 240);
+                //send_reset_drawing(centerX, 0, displayWidth, 240, 1);
 
                 const uint16_t displayWidth = 320;
-                send_reset_drawing(0, 0, 320, 240);
+                send_reset_drawing(0, 0, 320, 240, 1);
 
                 for (y = 0; y < SMS_HEIGHT; y += 4)
                 {
@@ -954,7 +939,7 @@ void ili9341_write_frame_sms(uint8_t* buffer, uint16_t color[], uint8_t isGameGe
                 send_reset_drawing((320 / 2) - (SMS_WIDTH / 2),
                     (240 / 2) - (SMS_HEIGHT / 2),
                     SMS_WIDTH,
-                    SMS_HEIGHT);
+                    SMS_HEIGHT, 1);
 
                 for (y = 0; y < SMS_HEIGHT; y += LINE_COUNT)
                 {
@@ -1001,7 +986,7 @@ void ili9341_write_frame_sms(uint8_t* buffer, uint16_t color[], uint8_t isGameGe
                 const short outputWidth = 320;
                 const short outputHeight = 240;
 
-                send_reset_drawing(0, 0, outputWidth, outputHeight);
+                send_reset_drawing(0, 0, outputWidth, outputHeight, 1);
 
                 for (y = 0; y < 144; y += 3)
                 {
@@ -1070,7 +1055,7 @@ void ili9341_write_frame_sms(uint8_t* buffer, uint16_t color[], uint8_t isGameGe
                 send_reset_drawing((320 / 2) - (GAMEGEAR_WIDTH / 2),
                     (240 / 2) - (GAMEGEAR_HEIGHT / 2),
                     GAMEGEAR_WIDTH,
-                    GAMEGEAR_HEIGHT);
+                    GAMEGEAR_HEIGHT, 1);
 
                 for (y = 0; y < GAMEGEAR_HEIGHT; y += LINE_COUNT)
                 {
@@ -1126,7 +1111,7 @@ void ili9341_blank_screen()
     }
 
     // clear the screen
-    send_reset_drawing(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    send_reset_drawing(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 1);
 
     for (int y = 0; y < SCREEN_HEIGHT; y += LINE_COUNT)
     {
@@ -1139,23 +1124,32 @@ void ili9341_blank_screen()
 }
 
 static inline void
-write_partial_line(uint8_t *buffer, uint16_t *palette,
-                   int *last_left, int *last_width,
-                   int left, int width,
-                   int bufferIndex)
+write_rect(uint8_t *buffer, uint16_t *palette,
+           int left, int top, int width, int height,
+           int bufferIndex, int stride)
 {
-    if (*last_left != left || *last_width != width) {
-        *last_left = left;
-        *last_width = width;
-        send_reset_line_column(left, width);
-    }
+    int cont = (height > 1);
+    send_reset_drawing(left, top, width, height, cont);
 
-    uint16_t* line_buffer = line_buffer_get();
-    for (int j = 0; j < width; ++j) {
-        line_buffer[j] = palette[buffer[bufferIndex++]];
-    }
+    for (int y = 0; y < height;) {
+        int lines_remain = (height - y);
+        int lines_to_copy = (lines_remain > LINE_COUNT) ?
+          LINE_COUNT : lines_remain;
+        int end_line = y + lines_to_copy;
 
-    send_write_line(line_buffer, width);
+        int line_buffer_index = 0;
+        uint16_t* line_buffer = line_buffer_get();
+        for (; y < end_line; ++y, bufferIndex += stride) {
+            for (int j = 0; j < width; ++j) {
+                line_buffer[line_buffer_index++] =
+                  palette[buffer[bufferIndex + j]];
+            }
+        }
+
+        cont ?
+          send_continue_line(line_buffer, width, lines_to_copy) :
+          send_write_line(line_buffer, width);
+    }
 }
 
 void
@@ -1174,27 +1168,29 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 
     int origin_x = (SCREEN_WIDTH - width) / 2;
     int origin_y = (SCREEN_HEIGHT - height) / 2;
-    int last_left = -1;
-    int last_width = -1;
     int lines_written = 0;
 
-    for (int y = 0, i = 0; y < height; ++y, i += stride)
+    int repeat = 0;
+    for (int y = 0, i = 0; y < height; ++y, i += stride, --repeat)
     {
+        if (repeat > 0) continue;
+
         int left, line_width;
 
         if (diff) {
-            left = (int)diff[y].left;
-            line_width = (int)diff[y].width;
+            left = diff[y].left;
+            line_width = diff[y].width;
+            repeat = diff[y].repeat;
         } else {
             left = 0;
             line_width = width;
+            repeat = height;
         }
 
         if (line_width > 0) {
-            send_reset_line_row(origin_y + y);
-            write_partial_line(buffer, palette, &last_left, &last_width,
-                               origin_x + left, line_width, i + left);
-            ++lines_written;
+            write_rect(buffer, palette, origin_x + left, origin_y + y,
+                       line_width, repeat, i + left, stride);
+            lines_written += repeat;
         }
     }
 
@@ -1217,7 +1213,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 //         memset(line[0], 0x00, 320 * sizeof(uint16_t));
 //
 //         // clear the screen
-//         send_reset_drawing(0, 0, 320, 240);
+//         send_reset_drawing(0, 0, 320, 240, 1);
 //
 //         for (y = 0; y < 240; ++y)
 //         {
@@ -1232,7 +1228,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 //         const int displayHeight = 240;
 //
 //
-//         send_reset_drawing(0, 0, displayWidth, displayHeight);
+//         send_reset_drawing(0, 0, displayWidth, displayHeight, 1);
 //
 //         for (y = 0; y < displayHeight; y += 4)
 //         {
@@ -1252,7 +1248,7 @@ void ili9341_write_frame_rectangle(short left, short top, short width, short hei
 
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
 
-    send_reset_drawing(left, top, width, height);
+    send_reset_drawing(left, top, width, height, 1);
 
     if (buffer == NULL)
     {
@@ -1263,7 +1259,7 @@ void ili9341_write_frame_rectangle(short left, short top, short width, short hei
         }
 
         // clear the screen
-        send_reset_drawing(0, 0, 320, 240);
+        send_reset_drawing(0, 0, 320, 240, 1);
 
         for (y = 0; y < 240; y += LINE_COUNT)
         {
@@ -1289,7 +1285,7 @@ void ili9341_clear(uint16_t color)
 {
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
 
-    send_reset_drawing(0, 0, 320, 240);
+    send_reset_drawing(0, 0, 320, 240, 1);
 
 
     // clear the buffer
@@ -1302,7 +1298,7 @@ void ili9341_clear(uint16_t color)
     }
 
     // clear the screen
-    send_reset_drawing(0, 0, 320, 240);
+    send_reset_drawing(0, 0, 320, 240, 1);
 
     for (int y = 0; y < 240; y += LINE_COUNT)
     {
@@ -1322,7 +1318,7 @@ void ili9341_write_frame_rectangleLE(short left, short top, short width, short h
 
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
 
-    send_reset_drawing(left, top, width, height);
+    send_reset_drawing(left, top, width, height, 1);
 
     if (buffer == NULL)
     {
@@ -1333,7 +1329,7 @@ void ili9341_write_frame_rectangleLE(short left, short top, short width, short h
         }
 
         // clear the screen
-        send_reset_drawing(0, 0, 320, 240);
+        send_reset_drawing(0, 0, 320, 240, 1);
 
         for (y = 0; y < 240; y += LINE_COUNT)
         {
@@ -1457,15 +1453,15 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
    int diff_size = 0;
    if (!old_buffer) {
       diff_size = width * height;
-      for (int y = 0; y < height; ++y) {
-         out_diff[y].left = 0;
-         out_diff[y].width = width;
-      }
+      out_diff[0].left = 0;
+      out_diff[0].width = width;
+      out_diff[0].repeat = height;
    } else {
       int i = 0;
       for (short y = 0; y < height; ++y, i += stride) {
          out_diff[y].left = width;
          out_diff[y].width = 0;
+         out_diff[y].repeat = 1;
          for (int x = 0; x < width; ++x) {
             int idx = i + x;
             if (old_buffer[idx] != buffer[idx]) {
@@ -1479,8 +1475,39 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
          }
          diff_size += out_diff[y].width;
       }
+
    }
 
    return diff_size;
+}
+
+void IRAM_ATTR
+odroid_buffer_diff_optimize(uint8_t *buffer, uint8_t *old_buffer,
+                            short width, short height, short stride,
+                            odroid_scanline *out_diff)
+{
+    // We return an optimised diff above when there's no old buffer
+    if (!old_buffer) return;
+
+    // Run through and count how many lines each particular run has
+    // so that we can optimise and use write_continue and save on SPI
+    // bandwidth.
+    // If a scanline is within a couple of pixels, we merge them as the
+    // cost of sending the extra setup commands is about that much.
+    for (short y = height - 1; y > 0; --y) {
+        int left_diff = out_diff[y].left - out_diff[y-1].left;
+        if (abs(left_diff) > 1) continue;
+
+        int right = out_diff[y].left + out_diff[y].width;
+        int right_prev = out_diff[y-1].left + out_diff[y-1].width;
+        int right_diff = right - right_prev;
+        if (abs(right_diff) > 1) continue;
+
+        if (out_diff[y].left < out_diff[y-1].left)
+            out_diff[y-1].left = out_diff[y].left;
+        out_diff[y-1].width = (right > right_prev) ?
+            right - out_diff[y-1].left : right_prev - out_diff[y-1].left;
+        out_diff[y-1].repeat = out_diff[y].repeat + 1;
+    }
 }
 
