@@ -1476,16 +1476,18 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
         // Run through and count how many lines each particular run has
         // so that we can optimise and use write_continue and save on SPI
         // bandwidth.
-        // If a scanline is within a couple of pixels, we merge them as the
-        // cost of sending the extra setup commands is about that much.
+        // Because of the bandwidth required to setup the page/column
+        // address, etc., there need to be more than about 4 pixels saved
+        // or it can actually cost more to run setup than just transfer the
+        // extra pixels.
         for (short y = height - 1; y > 0; --y) {
-            int left_diff = out_diff[y].left - out_diff[y-1].left;
-            if (abs(left_diff) > 1) continue;
+            int left_diff = abs(out_diff[y].left - out_diff[y-1].left);
+            if (left_diff > 4) continue;
 
             int right = out_diff[y].left + out_diff[y].width;
             int right_prev = out_diff[y-1].left + out_diff[y-1].width;
-            int right_diff = right - right_prev;
-            if (abs(right_diff) > 1) continue;
+            int right_diff = abs(right - right_prev);
+            if (left_diff + right_diff > 4) continue;
 
             if (out_diff[y].left < out_diff[y-1].left)
               out_diff[y-1].left = out_diff[y].left;
