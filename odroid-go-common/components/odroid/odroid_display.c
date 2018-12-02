@@ -41,9 +41,13 @@ static spi_device_handle_t spi;
 uint16_t* line[LINE_BUFFERS];
 QueueHandle_t spi_queue;
 QueueHandle_t line_buffer_queue;
-SemaphoreHandle_t line_semaphore;
-SemaphoreHandle_t spi_empty;
 SemaphoreHandle_t spi_count_semaphore;
+spi_transaction_t global_transaction;
+bool use_polling = false;
+
+// The number of pixels that need to be updated to use interrupt-based updates
+// instead of polling.
+#define POLLING_PIXEL_THRESHOLD 1024
 
 
 bool isBackLightIntialized = false;
@@ -51,6 +55,8 @@ bool isBackLightIntialized = false;
 
 #define SCREEN_WIDTH 320
 #define SCREEN_HEIGHT 240
+
+#define LINE_BUFFER_SIZE (LINE_COUNT*SCREEN_WIDTH)
 
  // GB
 #define GAMEBOY_WIDTH (160)
@@ -179,18 +185,12 @@ static void spi_task(void *arg)
             int dc = (int)t->user & 0x80;
             if(dc)
             {
-                xSemaphoreGive(line_semaphore);
                 line_buffer_put(t->tx_buffer);
             }
 
             if(xQueueSend(spi_queue, &t, portMAX_DELAY) != pdPASS)
             {
                 abort();
-            }
-
-            if(uxQueueMessagesWaiting(spi_queue) >= SPI_TRANSACTION_COUNT)
-            {
-                xSemaphoreGive(spi_empty);
             }
         }
         else
@@ -214,17 +214,6 @@ static void spi_initialize()
     line_buffer_queue = xQueueCreate(LINE_BUFFERS, sizeof(void*));
     if(!line_buffer_queue) abort();
 
-
-    line_semaphore = xSemaphoreCreateCounting(LINE_BUFFERS, LINE_BUFFERS);
-    if (!line_semaphore) abort();
-
-
-    spi_empty = xSemaphoreCreateBinary();
-    if(!spi_empty) abort();
-
-    xSemaphoreGive(spi_empty);
-
-
     spi_count_semaphore = xSemaphoreCreateCounting(SPI_TRANSACTION_COUNT, 0);
     if (!spi_count_semaphore) abort();
 
@@ -236,7 +225,12 @@ static void spi_initialize()
 static spi_transaction_t* spi_get_transaction()
 {
     spi_transaction_t* t;
-    xQueueReceive(spi_queue, &t, portMAX_DELAY);
+
+    if (use_polling) {
+        t = &global_transaction;
+    } else {
+        xQueueReceive(spi_queue, &t, portMAX_DELAY);
+    }
 
     memset(t, 0, sizeof(*t));
 
@@ -253,18 +247,17 @@ static void spi_put_transaction(spi_transaction_t* t)
         t->flags |= SPI_TRANS_USE_RXDATA;
     }
 
-    if (uxSemaphoreGetCount(spi_empty) > 0)
-    {
-        if(xSemaphoreTake(spi_empty, portMAX_DELAY) != pdTRUE)
-        {
-            abort();
+    if (use_polling) {
+        spi_device_polling_transmit(spi, t);
+        if ((int)t->user & 0x80) {
+            line_buffer_put(t->tx_buffer);
         }
+    } else {
+        esp_err_t ret = spi_device_queue_trans(spi, t, portMAX_DELAY);
+        assert(ret==ESP_OK);
+
+        xSemaphoreGive(spi_count_semaphore);
     }
-
-    esp_err_t ret = spi_device_queue_trans(spi, t, portMAX_DELAY);
-    assert(ret==ESP_OK);
-
-    xSemaphoreGive(spi_count_semaphore);
 }
 
 
@@ -294,16 +287,16 @@ static void ili_data(const uint8_t *data, int len)
             {
                 t->tx_data[i] = data[i];
             }
-            t->length = len * 8;                 //Len is in bytes, transaction length is in bits.
+            t->length = len * 8;               //Len is in bytes, transaction length is in bits.
             t->user = (void*)1;                //D/C needs to be set to 1
             t->flags = SPI_TRANS_USE_TXDATA;
         }
         else
         {
-            t->length = len * 8;                 //Len is in bytes, transaction length is in bits.
+            t->length = len * 8;               //Len is in bytes, transaction length is in bits.
             t->tx_buffer = data;               //Data
             t->user = (void*)1;                //D/C needs to be set to 1
-            t->flags = 0; //SPI_TRANS_USE_TXDATA;
+            t->flags = 0;
         }
 
         spi_put_transaction(t);
@@ -364,22 +357,6 @@ void send_reset_drawing(int left, int top, int width, int height, int cont)
     }
 }
 
-// static void wait_for_line_buffer()
-// {
-//     // if(xSemaphoreTake(line_semaphore, 1000 / portTICK_RATE_MS) != pdTRUE )
-//     // {
-//     //     abort();
-//     // }
-// }
-
-void send_continue_wait()
-{
-    if(xSemaphoreTake(spi_empty, 1000 / portTICK_RATE_MS) != pdTRUE )
-    {
-        abort();
-    }
-}
-
 void send_continue_line(uint16_t *line, int width, int lineCount)
 {
     spi_transaction_t* t;
@@ -387,7 +364,7 @@ void send_continue_line(uint16_t *line, int width, int lineCount)
 
     t = spi_get_transaction();
 
-
+    //ili_cmd(0x3C);
     t->tx_data[0] = 0x3C;   //memory write continue
     t->length = 8;
     t->user = (void*)0;
@@ -665,8 +642,6 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
             }
         }
     }
-
-    send_continue_wait();
 
     odroid_display_unlock();
 }
@@ -1094,7 +1069,6 @@ void ili9341_write_frame_sms(uint8_t* buffer, uint16_t color[], uint8_t isGameGe
         }
     }
 
-    send_continue_wait();
     odroid_display_unlock();
 }
 
@@ -1119,7 +1093,6 @@ void ili9341_blank_screen()
         send_continue_line(line_buffer, SCREEN_WIDTH, LINE_COUNT);
     }
 
-    send_continue_wait();
     odroid_display_unlock();
 }
 
@@ -1133,8 +1106,10 @@ write_rect(uint8_t *buffer, uint16_t *palette,
 
     for (int y = 0; y < height;) {
         int lines_remain = (height - y);
-        int lines_to_copy = (lines_remain > LINE_COUNT) ?
-          LINE_COUNT : lines_remain;
+        int lines_to_copy = LINE_BUFFER_SIZE / width;
+        if (lines_to_copy > lines_remain) {
+            lines_to_copy = lines_remain;
+        }
         int end_line = y + lines_to_copy;
 
         int line_buffer_index = 0;
@@ -1164,11 +1139,9 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 
     odroid_display_lock();
 
-    //xTaskToNotify = xTaskGetCurrentTaskHandle();
-
     int origin_x = (SCREEN_WIDTH - width) / 2;
     int origin_y = (SCREEN_HEIGHT - height) / 2;
-    int lines_written = 0;
+    bool need_polling_updates = false;
 
     int repeat = 0;
     for (int y = 0, i = 0; y < height; ++y, i += stride, --repeat)
@@ -1187,15 +1160,47 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
             repeat = height;
         }
 
-        if (line_width > 0) {
+        int n_pixels = line_width * repeat;
+
+        if (n_pixels >= POLLING_PIXEL_THRESHOLD) {
             write_rect(buffer, palette, origin_x + left, origin_y + y,
                        line_width, repeat, i + left, stride);
-            lines_written += repeat;
+        } else if (line_width > 0) {
+            need_polling_updates = true;
         }
     }
 
-    if (lines_written > 0) {
-        send_continue_wait();
+    // Use polling updates for smaller areas
+    if (need_polling_updates) {
+        // Drain SPI queue before switching to polling mode
+        odroid_display_drain_spi();
+        use_polling = true;
+
+        repeat = 0;
+        for (int y = 0, i = 0; y < height; ++y, i += stride, --repeat)
+        {
+            if (repeat > 0) continue;
+
+            int left, line_width;
+
+            if (diff) {
+                left = diff[y].left;
+                line_width = diff[y].width;
+                repeat = diff[y].repeat;
+            } else {
+                left = 0;
+                line_width = width;
+                repeat = height;
+            }
+
+            int n_pixels = line_width * repeat;
+
+            if (line_width && n_pixels < POLLING_PIXEL_THRESHOLD) {
+                write_rect(buffer, palette, origin_x + left, origin_y + y,
+                           line_width, repeat, i + left, stride);
+            }
+        }
+        use_polling = false;
     }
 
     odroid_display_unlock();
@@ -1277,8 +1282,6 @@ void ili9341_write_frame_rectangle(short left, short top, short width, short hei
             send_continue_line(line_buffer, width, 1);
         }
     }
-
-    send_continue_wait();
 }
 
 void ili9341_clear(uint16_t color)
@@ -1305,8 +1308,6 @@ void ili9341_clear(uint16_t color)
         uint16_t* line_buffer = line_buffer_get();
         send_continue_line(line_buffer, 320, LINE_COUNT);
     }
-
-    send_continue_wait();
 }
 
 void ili9341_write_frame_rectangleLE(short left, short top, short width, short height, uint16_t* buffer)
@@ -1352,8 +1353,6 @@ void ili9341_write_frame_rectangleLE(short left, short top, short width, short h
             send_continue_line(line_buffer, width, 1);
         }
     }
-
-    send_continue_wait();
 }
 
 void display_tasktonotify_set(int value)
@@ -1386,10 +1385,16 @@ void odroid_display_show_splash()
 
 void odroid_display_drain_spi()
 {
-    // if(xSemaphoreTake(spi_empty, 1000 / portTICK_RATE_MS) != pdTRUE )
-    // {
-    //     abort();
-    // }
+    spi_transaction_t *t[SPI_TRANSACTION_COUNT];
+    for (int i = 0; i < SPI_TRANSACTION_COUNT; ++i) {
+        xQueueReceive(spi_queue, &t[i], portMAX_DELAY);
+    }
+    for (int i = 0; i < SPI_TRANSACTION_COUNT; ++i) {
+        if (xQueueSend(spi_queue, &t[i], portMAX_DELAY) != pdPASS)
+        {
+            abort();
+        }
+    }
 }
 
 void odroid_display_show_sderr(int errNum)
@@ -1442,6 +1447,7 @@ void odroid_display_unlock()
 {
     if (!display_mutex) abort();
 
+    odroid_display_drain_spi();
     xSemaphoreGive(display_mutex);
 }
 
@@ -1477,9 +1483,8 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
         // so that we can optimise and use write_continue and save on SPI
         // bandwidth.
         // Because of the bandwidth required to setup the page/column
-        // address, etc., there need to be more than about 4 pixels saved
-        // or it can actually cost more to run setup than just transfer the
-        // extra pixels.
+        // address, etc., it can actually cost more to run setup than just
+        // transfer the extra pixels.
         for (short y = height - 1; y > 0; --y) {
             int left_diff = abs(out_diff[y].left - out_diff[y-1].left);
             if (left_diff > 4) continue;
