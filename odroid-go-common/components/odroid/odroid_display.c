@@ -1096,37 +1096,47 @@ void ili9341_blank_screen()
     odroid_display_unlock();
 }
 
-static void
+static void IRAM_ATTR
 write_rect(uint8_t *buffer, uint16_t *palette,
            int origin_x, int origin_y,
            int left, int top, int width, int height,
            int bufferIndex, int stride,
            int x_inc, int y_inc)
 {
-    int actual_left, actual_width, actual_top, actual_height;
+    int actual_left, actual_width, actual_top, actual_height, ix_acc, iy_acc;
 
+    // TODO: Better verify these calculations are correct. They are correct
+    //       when width = 256, but that's sometimes a convenient divider.
     if (x_inc != SCREEN_WIDTH) {
         int right = left + width;
-        actual_left = (SCREEN_WIDTH * left) / x_inc;
-        actual_width = ((SCREEN_WIDTH * right) + (x_inc - 1)) / x_inc - actual_left;
+        actual_left = ((SCREEN_WIDTH * left) + (x_inc - 1)) / x_inc;
+        actual_width = ((SCREEN_WIDTH * right) + x_inc) / x_inc - actual_left;
 
         if (actual_left + actual_width > SCREEN_WIDTH)
             actual_width = SCREEN_WIDTH - actual_left;
+
+        ix_acc = actual_left * x_inc;
+        ix_acc -= (ix_acc / SCREEN_WIDTH) * SCREEN_WIDTH;
     } else {
         actual_left = left;
         actual_width = width;
+        ix_acc = 0;
     }
 
     if (y_inc != SCREEN_HEIGHT) {
         int bottom = top + height;
-        actual_top = (SCREEN_HEIGHT * top) / y_inc;
-        actual_height = ((SCREEN_HEIGHT * bottom) + (y_inc - 1)) / y_inc - actual_top;
+        actual_top = ((SCREEN_HEIGHT * top) + (y_inc - 1)) / y_inc;
+        actual_height = ((SCREEN_HEIGHT * bottom) + y_inc) / y_inc - actual_top;
 
         if (actual_top + actual_height > SCREEN_HEIGHT)
             actual_height = SCREEN_HEIGHT - actual_top;
+
+        iy_acc = actual_top * y_inc;
+        iy_acc -= (iy_acc / SCREEN_HEIGHT) * SCREEN_HEIGHT;
     } else {
         actual_top = top;
         actual_height = height;
+        iy_acc = 0;
     }
 
     int cont = (actual_height > 1);
@@ -1134,7 +1144,7 @@ write_rect(uint8_t *buffer, uint16_t *palette,
     send_reset_drawing(origin_x + actual_left, origin_y + actual_top,
                        actual_width, actual_height, cont);
 
-    for (int y = 0, y_acc = 0, ay = 0; ay < actual_height;)
+    for (int y = 0, y_acc = iy_acc, ay = 0; ay < actual_height;)
     {
         int line_buffer_index = 0;
         uint16_t* line_buffer = line_buffer_get();
@@ -1143,7 +1153,7 @@ write_rect(uint8_t *buffer, uint16_t *palette,
         for (; (lines_to_copy < LINE_COUNT) &&
              (ay < actual_height); ++lines_to_copy, ++ay)
         {
-            for (int x = 0, x_acc = 0, ax = 0; ax < actual_width; ++ax)
+            for (int x = 0, x_acc = ix_acc, ax = 0; ax < actual_width; ++ax)
             {
                 line_buffer[line_buffer_index + ax] =
                   palette[buffer[bufferIndex + x]];
