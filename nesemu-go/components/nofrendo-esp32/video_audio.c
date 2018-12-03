@@ -312,14 +312,16 @@ static void videoTask(void *arg) {
 
         struct bitmap_meta *update = data;
 
-        if (previous_scaling_enabled != scaling_enabled)
+        bool scale_changed = (previous_scaling_enabled != scaling_enabled);
+        if (scale_changed)
         {
             // Clear display
             ili9341_blank_screen();
             previous_scaling_enabled = scaling_enabled;
         }
 
-        ili9341_write_frame_8bit(update->buffer, update->diff,
+        ili9341_write_frame_8bit(update->buffer,
+                                 scale_changed ? NULL : update->diff,
                                  NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
                                  update->stride, myPalette, scaling_enabled);
 
