@@ -49,6 +49,9 @@ bool use_polling = false;
 // instead of polling.
 #define POLLING_PIXEL_THRESHOLD 1024
 
+// At a certain point, it's quicker to just do a single transfer for the whole
+// screen than try to break it down into partial updates
+#define PARTIAL_UPDATE_THRESHOLD (256*240)
 
 bool isBackLightIntialized = false;
 
@@ -1112,8 +1115,8 @@ write_rect(uint8_t *buffer, uint16_t *palette,
         actual_left = ((SCREEN_WIDTH * left) + (x_inc - 1)) / x_inc;
         actual_width = ((SCREEN_WIDTH * right) + x_inc) / x_inc - actual_left;
 
-        if (actual_left + actual_width > SCREEN_WIDTH)
-            actual_width = SCREEN_WIDTH - actual_left;
+        if (origin_x + actual_left + actual_width > SCREEN_WIDTH)
+            actual_width = SCREEN_WIDTH - actual_left - origin_x;
 
         ix_acc = actual_left * x_inc;
         ix_acc -= (ix_acc / SCREEN_WIDTH) * SCREEN_WIDTH;
@@ -1128,8 +1131,8 @@ write_rect(uint8_t *buffer, uint16_t *palette,
         actual_top = ((SCREEN_HEIGHT * top) + (y_inc - 1)) / y_inc;
         actual_height = ((SCREEN_HEIGHT * bottom) + y_inc) / y_inc - actual_top;
 
-        if (actual_top + actual_height > SCREEN_HEIGHT)
-            actual_height = SCREEN_HEIGHT - actual_top;
+        if (origin_y + actual_top + actual_height > SCREEN_HEIGHT)
+            actual_height = SCREEN_HEIGHT - actual_top - origin_y;
 
         iy_acc = actual_top * y_inc;
         iy_acc -= (iy_acc / SCREEN_HEIGHT) * SCREEN_HEIGHT;
@@ -1184,10 +1187,10 @@ write_rect(uint8_t *buffer, uint16_t *palette,
     }
 }
 
-void
+void IRAM_ATTR
 ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
                          short width, short height, short stride,
-                         uint16_t* palette, uint8_t scale)
+                         uint16_t* palette, uint8_t do_scale)
 {
     if (!buffer) {
         ili9341_blank_screen();
@@ -1196,16 +1199,38 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 
     odroid_display_lock();
 
-    int origin_x, origin_y, x_inc, y_inc;
-    if (scale) {
-        origin_x = origin_y = 0;
-        x_inc = width;
-        y_inc = height;
+    float scale;
+    int origin_x, origin_y, x_inc, y_inc, poll_threshold;
+    if (do_scale) {
+        float buffer_aspect = width / (float)height;
+        float screen_aspect = SCREEN_WIDTH / (float)SCREEN_HEIGHT;
+
+        if (buffer_aspect < screen_aspect) {
+            scale = SCREEN_HEIGHT / (float)height;
+            origin_x = (SCREEN_WIDTH - (width * scale)) / 2;
+            origin_y = 0;
+        } else {
+            scale = SCREEN_WIDTH / (float)width;
+            origin_x = 0;
+            origin_y = (SCREEN_HEIGHT - (height * scale)) / 2;
+        }
+        x_inc = SCREEN_WIDTH / scale;
+        y_inc = SCREEN_HEIGHT / scale;
+        poll_threshold = POLLING_PIXEL_THRESHOLD / scale;
     } else {
+        scale = 1.f;
         x_inc = SCREEN_WIDTH;
         y_inc = SCREEN_HEIGHT;
         origin_x = (SCREEN_WIDTH - width) / 2;
         origin_y = (SCREEN_HEIGHT - height) / 2;
+        poll_threshold = POLLING_PIXEL_THRESHOLD;
+    }
+
+    if (diff) {
+        int n_pixels = odroid_buffer_diff_count(diff, height);
+        if (n_pixels * scale > PARTIAL_UPDATE_THRESHOLD) {
+            diff = NULL;
+        }
     }
 
     bool need_polling_updates = false;
@@ -1227,7 +1252,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 
         int n_pixels = line_width * repeat;
 
-        if (n_pixels >= POLLING_PIXEL_THRESHOLD) {
+        if (n_pixels >= poll_threshold) {
             write_rect(buffer, palette, origin_x, origin_y,
                        left, y, line_width, repeat, i + left, stride,
                        x_inc, y_inc);
@@ -1257,7 +1282,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 
             int n_pixels = line_width * repeat;
 
-            if (line_width && n_pixels < POLLING_PIXEL_THRESHOLD) {
+            if (line_width && n_pixels < poll_threshold) {
                 write_rect(buffer, palette, origin_x, origin_y,
                            left, y, line_width, repeat, i + left, stride,
                            x_inc, y_inc);
@@ -1550,12 +1575,12 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
         // transfer the extra pixels.
         for (short y = height - 1; y > 0; --y) {
             int left_diff = abs(out_diff[y].left - out_diff[y-1].left);
-            if (left_diff > 4) continue;
+            if (left_diff > 8) continue;
 
             int right = out_diff[y].left + out_diff[y].width;
             int right_prev = out_diff[y-1].left + out_diff[y-1].width;
             int right_diff = abs(right - right_prev);
-            if (left_diff + right_diff > 4) continue;
+            if (right_diff > 8) continue;
 
             if (out_diff[y].left < out_diff[y-1].left)
               out_diff[y-1].left = out_diff[y].left;
