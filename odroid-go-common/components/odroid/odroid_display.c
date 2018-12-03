@@ -1096,34 +1096,81 @@ void ili9341_blank_screen()
     odroid_display_unlock();
 }
 
-static inline void
+static void
 write_rect(uint8_t *buffer, uint16_t *palette,
+           int origin_x, int origin_y,
            int left, int top, int width, int height,
-           int bufferIndex, int stride)
+           int bufferIndex, int stride,
+           int x_inc, int y_inc)
 {
-    int cont = (height > 1);
-    send_reset_drawing(left, top, width, height, cont);
+    int actual_left, actual_width, actual_top, actual_height;
 
-    for (int y = 0; y < height;) {
-        int lines_remain = (height - y);
-        int lines_to_copy = LINE_BUFFER_SIZE / width;
-        if (lines_to_copy > lines_remain) {
-            lines_to_copy = lines_remain;
-        }
-        int end_line = y + lines_to_copy;
+    if (x_inc != SCREEN_WIDTH) {
+        int right = left + width;
+        actual_left = (SCREEN_WIDTH * left) / x_inc;
+        actual_width = ((SCREEN_WIDTH * right) + (x_inc - 1)) / x_inc - actual_left;
 
+        if (actual_left + actual_width > SCREEN_WIDTH)
+            actual_width = SCREEN_WIDTH - actual_left;
+    } else {
+        actual_left = left;
+        actual_width = width;
+    }
+
+    if (y_inc != SCREEN_HEIGHT) {
+        int bottom = top + height;
+        actual_top = (SCREEN_HEIGHT * top) / y_inc;
+        actual_height = ((SCREEN_HEIGHT * bottom) + (y_inc - 1)) / y_inc - actual_top;
+
+        if (actual_top + actual_height > SCREEN_HEIGHT)
+            actual_height = SCREEN_HEIGHT - actual_top;
+    } else {
+        actual_top = top;
+        actual_height = height;
+    }
+
+    int cont = (actual_height > 1);
+
+    send_reset_drawing(origin_x + actual_left, origin_y + actual_top,
+                       actual_width, actual_height, cont);
+
+    for (int y = 0, y_acc = 0, ay = 0; ay < actual_height;)
+    {
         int line_buffer_index = 0;
         uint16_t* line_buffer = line_buffer_get();
-        for (; y < end_line; ++y, bufferIndex += stride) {
-            for (int j = 0; j < width; ++j) {
-                line_buffer[line_buffer_index++] =
-                  palette[buffer[bufferIndex + j]];
+
+        int lines_to_copy = 0;
+        for (; (lines_to_copy < LINE_COUNT) &&
+             (ay < actual_height); ++lines_to_copy, ++ay)
+        {
+            for (int x = 0, x_acc = 0, ax = 0; ax < actual_width; ++ax)
+            {
+                line_buffer[line_buffer_index + ax] =
+                  palette[buffer[bufferIndex + x]];
+
+                x_acc += x_inc;
+                if (x_acc >= SCREEN_WIDTH) {
+                    if (x < width - 1) {
+                        ++x;
+                    }
+                    x_acc -= SCREEN_WIDTH;
+                }
+            }
+            line_buffer_index += actual_width;
+
+            y_acc += y_inc;
+            if (y_acc >= SCREEN_HEIGHT) {
+                if (y < height - 1) {
+                    ++y;
+                    bufferIndex += stride;
+                }
+                y_acc -= SCREEN_HEIGHT;
             }
         }
 
         cont ?
-          send_continue_line(line_buffer, width, lines_to_copy) :
-          send_write_line(line_buffer, width);
+          send_continue_line(line_buffer, actual_width, lines_to_copy) :
+          send_write_line(line_buffer, actual_width);
     }
 }
 
@@ -1139,32 +1186,41 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 
     odroid_display_lock();
 
-    int origin_x = (SCREEN_WIDTH - width) / 2;
-    int origin_y = (SCREEN_HEIGHT - height) / 2;
-    bool need_polling_updates = false;
+    int origin_x, origin_y, x_inc, y_inc;
+    if (scale) {
+        origin_x = origin_y = 0;
+        x_inc = width;
+        y_inc = height;
+    } else {
+        x_inc = SCREEN_WIDTH;
+        y_inc = SCREEN_HEIGHT;
+        origin_x = (SCREEN_WIDTH - width) / 2;
+        origin_y = (SCREEN_HEIGHT - height) / 2;
+    }
 
+    bool need_polling_updates = false;
+    int left = 0;
+    int line_width = width;
     int repeat = 0;
+
     for (int y = 0, i = 0; y < height; ++y, i += stride, --repeat)
     {
         if (repeat > 0) continue;
-
-        int left, line_width;
 
         if (diff) {
             left = diff[y].left;
             line_width = diff[y].width;
             repeat = diff[y].repeat;
         } else {
-            left = 0;
-            line_width = width;
             repeat = height;
         }
 
         int n_pixels = line_width * repeat;
 
         if (n_pixels >= POLLING_PIXEL_THRESHOLD) {
-            write_rect(buffer, palette, origin_x + left, origin_y + y,
-                       line_width, repeat, i + left, stride);
+            write_rect(buffer, palette, origin_x, origin_y,
+                       left, y, line_width, repeat, i + left, stride,
+                       x_inc, y_inc);
         } else if (line_width > 0) {
             need_polling_updates = true;
         }
@@ -1181,23 +1237,20 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
         {
             if (repeat > 0) continue;
 
-            int left, line_width;
-
             if (diff) {
                 left = diff[y].left;
                 line_width = diff[y].width;
                 repeat = diff[y].repeat;
             } else {
-                left = 0;
-                line_width = width;
                 repeat = height;
             }
 
             int n_pixels = line_width * repeat;
 
             if (line_width && n_pixels < POLLING_PIXEL_THRESHOLD) {
-                write_rect(buffer, palette, origin_x + left, origin_y + y,
-                           line_width, repeat, i + left, stride);
+                write_rect(buffer, palette, origin_x, origin_y,
+                           left, y, line_width, repeat, i + left, stride,
+                           x_inc, y_inc);
             }
         }
         use_polling = false;
