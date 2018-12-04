@@ -25,6 +25,14 @@ const char* SD_BASE_PATH = "/sd";
 
 #define AUDIO_SAMPLE_RATE (32000)
 
+#define SMS_WIDTH 256
+#define SMS_HEIGHT 192
+
+#define GG_WIDTH 160
+#define GG_HEIGHT 144
+
+#define PIXEL_MASK 0x1F
+
 uint16 palette[PALETTE_SIZE];
 uint8_t* framebuffer[2];
 int currentFramebuffer = 0;
@@ -40,45 +48,58 @@ TaskHandle_t videoTaskHandle;
 odroid_volume_level Volume;
 odroid_battery_state battery;
 
+struct bitmap_meta {
+    odroid_scanline diff[SMS_HEIGHT];
+    uint8_t *buffer;
+    int width;
+    int height;
+    int stride;
+};
+static struct bitmap_meta update1 = {0,};
+static struct bitmap_meta update2 = {0,};
+static struct bitmap_meta *update = &update1;
+
 bool scaling_enabled = true;
 bool previous_scaling_enabled = true;
 
 volatile bool videoTaskIsRunning = false;
 void videoTask(void *arg)
 {
-    uint8_t* param;
+    struct bitmap_meta* meta;
 
     videoTaskIsRunning = true;
 
-    const bool isGameGear = (sms.console == CONSOLE_GG) | (sms.console == CONSOLE_GGMS);
-
     while(1)
     {
-        xQueuePeek(vidQueue, &param, portMAX_DELAY);
+        xQueuePeek(vidQueue, &meta, portMAX_DELAY);
 
-        if (param == 1)
-            break;
+        if (!meta) break;
 
-        if (previous_scaling_enabled != scaling_enabled)
+        bool scale_changed = (previous_scaling_enabled != scaling_enabled);
+        if (scale_changed)
         {
-            ili9341_write_frame_sms(NULL, NULL, isGameGear, false);
+            ili9341_blank_screen();
             previous_scaling_enabled = scaling_enabled;
         }
 
         render_copy_palette(palette);
-        ili9341_write_frame_sms(param, palette, isGameGear, scaling_enabled);
+        ili9341_write_frame_8bit(meta->buffer,
+                                 scale_changed ? NULL : meta->diff,
+                                 meta->width, meta->height,
+                                 meta->stride, PIXEL_MASK, palette,
+                                 scaling_enabled);
 
         odroid_input_battery_level_read(&battery);
 
-        xQueueReceive(vidQueue, &param, portMAX_DELAY);
+        xQueueReceive(vidQueue, &meta, portMAX_DELAY);
     }
 
-    odroid_display_lock_sms_display();
+    odroid_display_lock();
 
     // Draw hourglass
     odroid_display_show_hourglass();
 
-    odroid_display_unlock_sms_display();
+    odroid_display_unlock();
 
     videoTaskIsRunning = false;
     vTaskDelete(NULL);
@@ -115,7 +136,7 @@ static void SaveState()
     char* romName = odroid_settings_RomFilePath_get();
     if (romName)
     {
-        odroid_display_lock_sms_display();
+        odroid_display_lock();
         odroid_display_drain_spi();
 
         char* fileName = odroid_util_GetFileName(romName);
@@ -152,7 +173,7 @@ static void SaveState()
         //     abort();
         // }
 
-        odroid_display_unlock_sms_display();
+        odroid_display_unlock();
 
         free(pathName);
         free(fileName);
@@ -183,7 +204,7 @@ static void LoadState(const char* cartName)
     char* romName = odroid_settings_RomFilePath_get();
     if (romName)
     {
-        odroid_display_lock_sms_display();
+        odroid_display_lock();
         odroid_display_drain_spi();
 
         char* fileName = odroid_util_GetFileName(romName);
@@ -219,7 +240,7 @@ static void LoadState(const char* cartName)
         //     abort();
         // }
 
-        odroid_display_unlock_sms_display();
+        odroid_display_unlock();
 
         free(pathName);
         free(fileName);
@@ -246,17 +267,16 @@ static void LoadState(const char* cartName)
 
 static void PowerDown()
 {
-    uint16_t* param = 1;
+    // Stop tasks
+    printf("PowerDown: stopping tasks.\n");
 
     // Clear audio to prevent studdering
     printf("PowerDown: stopping audio.\n");
     odroid_audio_terminate();
 
-    // Stop tasks
-    printf("PowerDown: stopping tasks.\n");
-
-    xQueueSend(vidQueue, &param, portMAX_DELAY);
-    while (videoTaskIsRunning) { vTaskDelay(1); }
+    void *exitVideoTask = NULL;
+    xQueueSend(vidQueue, &exitVideoTask, portMAX_DELAY);
+    while (videoTaskIsRunning) { vTaskDelay(10); }
 
 
     // state
@@ -276,18 +296,18 @@ static void PowerDown()
 static void DoHome()
 {
     esp_err_t err;
-    uint16_t* param = 1;
+
+    // Stop tasks
+    printf("PowerDown: stopping tasks.\n");
 
     // Clear audio to prevent studdering
     printf("PowerDown: stopping audio.\n");
     odroid_audio_terminate();
 
 
-    // Stop tasks
-    printf("PowerDown: stopping tasks.\n");
-
-    xQueueSend(vidQueue, &param, portMAX_DELAY);
-    while (videoTaskIsRunning) { vTaskDelay(1); }
+    void *exitVideoTask = NULL;
+    xQueueSend(vidQueue, &exitVideoTask, portMAX_DELAY);
+    while (videoTaskIsRunning) { vTaskDelay(10); }
 
 
     // state
@@ -314,11 +334,13 @@ void app_main(void)
 {
     printf("smsplusgx (%s-%s).\n", COMPILEDATE, GITREV);
 
-    framebuffer[0] = heap_caps_malloc(256 * 192, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+    framebuffer[0] = heap_caps_malloc(SMS_WIDTH * SMS_HEIGHT,
+                                      MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
     if (!framebuffer[0]) abort();
     printf("app_main: framebuffer[0]=%p\n", framebuffer[0]);
 
-    framebuffer[1] = heap_caps_malloc(256 * 192, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+    framebuffer[1] = heap_caps_malloc(SMS_WIDTH * SMS_HEIGHT,
+                                      MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
     if (!framebuffer[1]) abort();
     printf("app_main: framebuffer[1]=%p\n", framebuffer[1]);
 
@@ -539,7 +561,7 @@ void app_main(void)
 
 
 
-    ili9341_write_frame_sms(NULL, NULL, false, false);
+    ili9341_blank_screen();
 
     odroid_audio_init(odroid_settings_AudioSink_get(), AUDIO_SAMPLE_RATE);
 
@@ -563,10 +585,10 @@ void app_main(void)
     //
     // memset(sms.sram, 0xff, SRAM_SIZE);
 
-    bitmap.width = 256;
-	bitmap.height = 192;
-	bitmap.pitch = bitmap.width;
-	//bitmap.depth = 8;
+    bitmap.width = SMS_WIDTH;
+    bitmap.height = SMS_HEIGHT;
+    bitmap.pitch = bitmap.width;
+    //bitmap.depth = 8;
     bitmap.data = framebuffer[0];
 
     // cart.pages = (cartSize / 0x4000);
@@ -752,10 +774,35 @@ void app_main(void)
         {
             system_frame(0);
 
-            xQueueSend(vidQueue, &bitmap.data, portMAX_DELAY);
+            // Store buffer data
+            if (sms.console == CONSOLE_GG || sms.console == CONSOLE_GGMS) {
+                update->buffer = bitmap.data + (SMS_WIDTH - GG_WIDTH) / 2;
+                update->width = GG_WIDTH;
+                update->height = GG_HEIGHT;
+                update->stride = SMS_WIDTH;
+            } else {
+                update->buffer = bitmap.data;
+                update->width = SMS_WIDTH;
+                update->height = SMS_HEIGHT;
+                update->stride = SMS_WIDTH;
+            }
 
+            // Swap buffers
             currentFramebuffer = currentFramebuffer ? 0 : 1;
             bitmap.data = framebuffer[currentFramebuffer];
+
+            // Diff buffer
+            odroid_buffer_diff(update->buffer, bitmap.data,
+                               update->width, update->height,
+                               update->stride, PIXEL_MASK, update->diff);
+
+            // Send update data to video queue on other core
+            void *arg = (void*)update;
+            xQueueSend(vidQueue, &arg, portMAX_DELAY);
+
+            // Flip the update struct so we don't start writing into it while
+            // the second core is still updating the screen.
+            update = (update == &update1) ? &update2 : &update1;
         }
         else
         {

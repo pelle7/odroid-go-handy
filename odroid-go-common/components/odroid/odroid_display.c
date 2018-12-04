@@ -66,14 +66,6 @@ bool isBackLightIntialized = false;
 #define GAMEBOY_HEIGHT (144)
 
 
-// SMS
-#define SMS_WIDTH (256)
-#define SMS_HEIGHT (192)
-
-#define GAMEGEAR_WIDTH (160)
-#define GAMEGEAR_HEIGHT (144)
-
-#define PIXEL_MASK          (0x1F)
 
 
 
@@ -800,283 +792,6 @@ void ili9341_prepare()
 #endif
 }
 
-//
-void ili9341_write_frame_sms(uint8_t* buffer, uint16_t color[], uint8_t isGameGear, uint8_t scale)
-{
-    short x, y;
-
-    odroid_display_lock();
-
-    if (buffer == NULL)
-    {
-        // clear the buffer
-        for (int i = 0; i < LINE_BUFFERS; ++i)
-        {
-            memset(line[i], 0, 320 * sizeof(uint16_t) * LINE_COUNT);
-        }
-
-        // clear the screen
-        send_reset_drawing(0, 0, 320, 240, 1);
-
-        for (y = 0; y < 240; y += LINE_COUNT)
-        {
-            uint16_t* line_buffer = line_buffer_get();
-            send_continue_line(line_buffer, 320, LINE_COUNT);
-        }
-    }
-    else
-    {
-        uint8_t* framePtr = buffer;
-
-
-        if (!isGameGear)
-        {
-            if (scale)
-            {
-                // const short xOffset = 4;
-                // const uint16_t displayWidth = 320 - (xOffset / 4 * 5);
-                // const short centerX = (320 - displayWidth) >> 1;
-
-                //send_reset_drawing(centerX, 0, displayWidth, 240, 1);
-
-                const uint16_t displayWidth = 320;
-                send_reset_drawing(0, 0, 320, 240, 1);
-
-                for (y = 0; y < SMS_HEIGHT; y += 4)
-                {
-                  int linesWritten = 0;
-                  uint16_t* line_buffer = line_buffer_get();
-
-                  for (short i = 0; i < 4; ++i)
-                  {
-                      if((y + i) >= SMS_HEIGHT)
-                        break;
-
-                      int index = (i) * displayWidth;
-                      if (i > 1) index += displayWidth; // skip a line for blending
-
-                      //int bufferIndex = ((y + i) * SMS_WIDTH) + xOffset;
-                      int bufferIndex = ((y + i) * SMS_WIDTH);
-
-                      uint16_t samples[4];
-
-                      //for (x = 0; x < SMS_WIDTH - (xOffset * 2); x += 4)
-                      for (x = 0; x < SMS_WIDTH; x += 4)
-                      {
-                        for (short j = 0; j < 4; ++j)
-                        {
-                            uint8_t val = framePtr[bufferIndex++] & PIXEL_MASK;
-                            //
-                            // uint8_t r = color[val][0];
-                            // uint8_t g = color[val][1];
-                            // uint8_t b = color[val][2];
-                            //
-                            // samples[j] = (((r << 8) & 0xF800) | ((g << 3) & 0x07E0) | ((b >> 3) & 0x001F));
-
-                            samples[j] = color[val];
-                        }
-
-                        uint16_t mid1 = Blend(samples[1], samples[2]);
-
-                        line_buffer[index++] = ((samples[0] >> 8) | (samples[0] << 8));
-                        line_buffer[index++] = ((samples[1] >> 8) | (samples[1] << 8));
-                        line_buffer[index++] = ((mid1 >> 8) | (mid1 << 8));
-                        line_buffer[index++] = ((samples[2] >> 8) | (samples[2] << 8));
-                        line_buffer[index++] = ((samples[3] >> 8) | (samples[3] << 8));
-                      }
-
-                      ++linesWritten;
-                  }
-
-                  // blend horizontal
-                  short srcIndex1 = displayWidth * 1;
-                  short srcIndex2 = displayWidth * 3;
-                  short dstIndex = displayWidth * 2;
-
-                  for (short i = 0; i < displayWidth; ++i)
-                  {
-                      uint16_t sample1 = line_buffer[srcIndex1++];
-                      sample1 = ((sample1 >> 8) | (sample1 << 8));
-
-                      uint16_t sample2 = line_buffer[srcIndex2++];
-                      sample2 = ((sample2 >> 8) | (sample2 << 8));
-
-                      uint16_t mid1 = Blend(sample1, sample2);
-
-                      line_buffer[dstIndex++] = ((mid1 >> 8) | (mid1 << 8));
-                  }
-
-                  ++linesWritten;
-
-                  // display
-                  send_continue_line(line_buffer, displayWidth, linesWritten);
-                }
-            }
-            else
-            {
-                send_reset_drawing((320 / 2) - (SMS_WIDTH / 2),
-                    (240 / 2) - (SMS_HEIGHT / 2),
-                    SMS_WIDTH,
-                    SMS_HEIGHT, 1);
-
-                for (y = 0; y < SMS_HEIGHT; y += LINE_COUNT)
-                {
-                  int linesWritten = 0;
-                  uint16_t* line_buffer = line_buffer_get();
-
-                  for (short i = 0; i < LINE_COUNT; ++i)
-                  {
-                      if((y + i) >= SMS_HEIGHT)
-                        break;
-
-                      int index = (i) * SMS_WIDTH;
-                      int bufferIndex = ((y + i) * SMS_WIDTH);
-
-                      for (x = 0; x < SMS_WIDTH; ++x)
-                      {
-                        // uint8_t val = framePtr[bufferIndex++] & PIXEL_MASK;
-                        //
-                        // uint8_t r = color[val][0];
-                        // uint8_t g = color[val][1];
-                        // uint8_t b = color[val][2];
-                        //
-                        // uint16_t sample = (((r << 8) & 0xF800) | ((g << 3) & 0x07E0) | ((b >> 3) & 0x001F));
-
-                        uint16_t sample = color[framePtr[bufferIndex++] & PIXEL_MASK];
-                        line_buffer[index++] = ((sample >> 8) | (sample << 8));
-                      }
-
-                      ++linesWritten;
-                  }
-
-                  // display
-                  send_continue_line(line_buffer, SMS_WIDTH, linesWritten);
-                }
-            }
-        }
-        else
-        {
-            // game Gear
-            //framePtr += (24 * 256);
-
-            if (scale)
-            {
-                const short outputWidth = 320;
-                const short outputHeight = 240;
-
-                send_reset_drawing(0, 0, outputWidth, outputHeight, 1);
-
-                for (y = 0; y < 144; y += 3)
-                {
-                    uint16_t* line_buffer = line_buffer_get();
-
-                    for (short i = 0; i < 3; ++i)
-                    {
-                        // skip middle vertical line
-                        int index = i * outputWidth * 2;
-                        int bufferIndex = ((y + i) * 256) + 48;
-
-                        for (x = 0; x < GAMEGEAR_WIDTH; ++x)
-                        {
-                            uint8_t val = framePtr[bufferIndex++] & PIXEL_MASK;
-
-                            // uint8_t r = color[val][0];
-                            // uint8_t g = color[val][1];
-                            // uint8_t b = color[val][2];
-                            //
-                            // uint16_t sample = (((r << 8) & 0xF800) | ((g << 3) & 0x07E0) | ((b >> 3) & 0x001F));
-
-                            uint16_t sample = color[val];
-                            sample = (sample >> 8) | (sample << 8);
-
-                            line_buffer[index++] = sample;
-                            line_buffer[index++] = sample;
-                        }
-                    }
-
-                    // Blend top and bottom lines into middle
-                    short sourceA = 0;
-                    short sourceB = outputWidth * 2;
-                    short sourceC = sourceB + (outputWidth * 2);
-
-                    short output1 = outputWidth;
-                    short output2 = output1 + (outputWidth * 2);
-
-                    for (short j = 0; j < outputWidth; ++j)
-                    {
-                      uint16_t a = line_buffer[sourceA++];
-                      a = ((a >> 8) | ((a) << 8));
-
-                      uint16_t b = line_buffer[sourceB++];
-                      b = ((b >> 8) | ((b) << 8));
-
-                      uint16_t c = line_buffer[sourceC++];
-                      c = ((c >> 8) | ((c) << 8));
-
-                      uint16_t mid = Blend(a, b);
-                      mid = ((mid >> 8) | ((mid) << 8));
-
-                      line_buffer[output1++] = mid;
-
-                      uint16_t mid2 = Blend(b, c);
-                      mid2 = ((mid2 >> 8) | ((mid2) << 8));
-
-                      line_buffer[output2++] = mid2;
-                    }
-
-                    // send the data
-                    send_continue_line(line_buffer, outputWidth, 5);
-                }
-            }
-            else
-            {
-                send_reset_drawing((320 / 2) - (GAMEGEAR_WIDTH / 2),
-                    (240 / 2) - (GAMEGEAR_HEIGHT / 2),
-                    GAMEGEAR_WIDTH,
-                    GAMEGEAR_HEIGHT, 1);
-
-                for (y = 0; y < GAMEGEAR_HEIGHT; y += LINE_COUNT)
-                {
-                  int linesWritten = 0;
-                  uint16_t* line_buffer = line_buffer_get();
-
-                  for (short i = 0; i < LINE_COUNT; ++i)
-                  {
-                      if((y + i) >= GAMEGEAR_HEIGHT)
-                        break;
-
-                      int index = (i) * GAMEGEAR_WIDTH;
-                      int bufferIndex = ((y + i) * 256) + 48;
-
-                      for (x = 0; x < GAMEGEAR_WIDTH; ++x)
-                      {
-                        uint8_t val = framePtr[bufferIndex++] & PIXEL_MASK;
-
-                        // uint8_t r = color[val][0];
-                        // uint8_t g = color[val][1];
-                        // uint8_t b = color[val][2];
-                        //
-                        // uint16_t sample = (((r << 8) & 0xF800) | ((g << 3) & 0x07E0) | ((b >> 3) & 0x001F));
-
-                        uint16_t sample = color[val];
-                        line_buffer[index++] = ((sample >> 8) | (sample << 8));
-                      }
-
-                      ++linesWritten;
-                  }
-
-                  // display
-                  send_continue_line(line_buffer, GAMEGEAR_WIDTH, linesWritten);
-                }
-            }
-        }
-    }
-
-    odroid_display_unlock();
-}
-
-//
-
 void ili9341_blank_screen()
 {
     odroid_display_lock();
@@ -1103,7 +818,7 @@ static void IRAM_ATTR
 write_rect(uint8_t *buffer, uint16_t *palette,
            int origin_x, int origin_y,
            int left, int top, int width, int height,
-           int bufferIndex, int stride,
+           int bufferIndex, int stride, uint8_t pixel_mask,
            int x_inc, int y_inc)
 {
     int actual_left, actual_width, actual_top, actual_height, ix_acc, iy_acc;
@@ -1159,7 +874,7 @@ write_rect(uint8_t *buffer, uint16_t *palette,
             for (int x = 0, x_acc = ix_acc, ax = 0; ax < actual_width; ++ax)
             {
                 line_buffer[line_buffer_index + ax] =
-                  palette[buffer[bufferIndex + x]];
+                  palette[buffer[bufferIndex + x] & pixel_mask];
 
                 x_acc += x_inc;
                 if (x_acc >= SCREEN_WIDTH) {
@@ -1190,7 +905,8 @@ write_rect(uint8_t *buffer, uint16_t *palette,
 void IRAM_ATTR
 ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
                          short width, short height, short stride,
-                         uint16_t* palette, uint8_t do_scale)
+                         uint8_t pixel_mask, uint16_t* palette,
+                         uint8_t do_scale)
 {
     if (!buffer) {
         ili9341_blank_screen();
@@ -1255,7 +971,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
         if (n_pixels >= poll_threshold) {
             write_rect(buffer, palette, origin_x, origin_y,
                        left, y, line_width, repeat, i + left, stride,
-                       x_inc, y_inc);
+                       pixel_mask, x_inc, y_inc);
         } else if (line_width > 0) {
             need_polling_updates = true;
         }
@@ -1285,7 +1001,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
             if (line_width && n_pixels < poll_threshold) {
                 write_rect(buffer, palette, origin_x, origin_y,
                            left, y, line_width, repeat, i + left, stride,
-                           x_inc, y_inc);
+                           pixel_mask, x_inc, y_inc);
             }
         }
         use_polling = false;
@@ -1541,7 +1257,7 @@ void odroid_display_unlock()
 
 void IRAM_ATTR
 odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
-                   short width, short height, short stride,
+                   short width, short height, short stride, uint8_t pixel_mask,
                    odroid_scanline *out_diff)
 {
     if (!old_buffer) {
@@ -1556,7 +1272,9 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
             out_diff[y].repeat = 1;
             for (int x = 0; x < width; ++x) {
                 int idx = i + x;
-                if (old_buffer[idx] != buffer[idx]) {
+                if ((old_buffer[idx] & pixel_mask) !=
+                    (buffer[idx] & pixel_mask))
+                {
                     if (x < out_diff[y].left)
                       out_diff[y].left = x;
 

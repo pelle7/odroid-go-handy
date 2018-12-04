@@ -57,6 +57,8 @@
 #define  DEFAULT_WIDTH        256
 #define  DEFAULT_HEIGHT       NES_VISIBLE_HEIGHT
 
+#define PIXEL_MASK 0x3F
+
 struct bitmap_meta {
     odroid_scanline diff[NES_VISIBLE_HEIGHT];
     uint8_t *buffer;
@@ -204,12 +206,12 @@ static int set_mode(int width, int height)
    return 0;
 }
 
-uint16 myPalette[192];
+uint16 myPalette[64];
 
 /* copy nes palette over to hardware */
 static void set_palette(rgb_t *pal)
 {
-   for (int i = 0; i < 192; i++)
+   for (int i = 0; i < 64; i++)
    {
       uint16_t c=(pal[i].b>>3)+((pal[i].g>>2)<<5)+((pal[i].r>>3)<<11);
       myPalette[i]=(c>>8)|((c&0xff)<<8);
@@ -259,7 +261,7 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
 
    odroid_buffer_diff(update->buffer, old_buffer,
                       NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
-                      update->stride, update->diff);
+                      update->stride, PIXEL_MASK, update->diff);
 
 #if 0
    // Because SPI is so slow, we save considerable time by cutting down how
@@ -298,16 +300,17 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
 
 
 //This runs on core 1.
-volatile bool exitVideoTaskFlag = false;
+volatile bool videoTaskIsRunning = false;
 static void videoTask(void *arg) {
     void* data = NULL;
 
-    while(!exitVideoTaskFlag)
+    videoTaskIsRunning = true;
+    while(1)
     {
         xQueuePeek(vidQueue, &data, portMAX_DELAY);
 
         if (!data) {
-            continue;
+            break;
         }
 
         struct bitmap_meta *update = data;
@@ -323,7 +326,8 @@ static void videoTask(void *arg) {
         ili9341_write_frame_8bit(update->buffer,
                                  scale_changed ? NULL : update->diff,
                                  NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
-                                 update->stride, myPalette, scaling_enabled);
+                                 update->stride, PIXEL_MASK,
+                                 myPalette, scaling_enabled);
 
         odroid_input_battery_level_read(&battery);
 
@@ -336,7 +340,7 @@ static void videoTask(void *arg) {
     odroid_display_unlock();
     //odroid_display_drain_spi();
 
-    exitVideoTaskFlag = false;
+    videoTaskIsRunning = false;
 
     vTaskDelete(NULL);
 
@@ -373,12 +377,13 @@ static void PowerDown()
     // Stop tasks
     printf("PowerDown: stopping tasks.\n");
 
-    exitVideoTaskFlag = true;
-    while (exitVideoTaskFlag) { vTaskDelay(10); }
-
-
     // Clear audio to prevent studdering
     odroid_audio_terminate();
+
+    void *exitVideoTask = NULL;
+    xQueueSend(vidQueue, &exitVideoTask, portMAX_DELAY);
+    while (videoTaskIsRunning) { vTaskDelay(10); }
+
 
     // state
     printf("PowerDown: Saving state.\n");
@@ -478,10 +483,11 @@ static int ConvertJoystickInput()
     {
         printf("Stopping video queue.\n");
 
-        exitVideoTaskFlag = true;
-        while(exitVideoTaskFlag) { vTaskDelay(10); }
-
         odroid_audio_terminate();
+
+        void *exitVideoTask = NULL;
+        xQueueSend(vidQueue, &exitVideoTask, portMAX_DELAY);
+        while (videoTaskIsRunning) { vTaskDelay(10); }
 
         //odroid_display_drain_spi();
 
