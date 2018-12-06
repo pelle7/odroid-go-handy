@@ -36,6 +36,9 @@ static spi_transaction_t trans[SPI_TRANSACTION_COUNT];
 static spi_device_handle_t spi;
 
 
+#define SCREEN_WIDTH 320
+#define SCREEN_HEIGHT 240
+
 #define LINE_BUFFERS (2)
 #define LINE_COUNT (5)
 uint16_t* line[LINE_BUFFERS];
@@ -47,19 +50,14 @@ bool use_polling = false;
 
 // The number of pixels that need to be updated to use interrupt-based updates
 // instead of polling.
-#define POLLING_PIXEL_THRESHOLD 1024
+#define POLLING_PIXEL_THRESHOLD (LINE_COUNT*SCREEN_WIDTH)
 
 // At a certain point, it's quicker to just do a single transfer for the whole
 // screen than try to break it down into partial updates
-#define PARTIAL_UPDATE_THRESHOLD (256*240)
+#define PARTIAL_UPDATE_THRESHOLD (160*144)
 
 bool isBackLightIntialized = false;
 
-
-#define SCREEN_WIDTH 320
-#define SCREEN_HEIGHT 240
-
-#define LINE_BUFFER_SIZE (LINE_COUNT*SCREEN_WIDTH)
 
  // GB
 #define GAMEBOY_WIDTH (160)
@@ -868,7 +866,8 @@ write_rect(uint8_t *buffer, uint16_t *palette,
         uint16_t* line_buffer = line_buffer_get();
 
         int lines_to_copy = 0;
-        for (; (lines_to_copy < LINE_COUNT) &&
+        int line_count = (SCREEN_WIDTH * LINE_COUNT) / actual_width;
+        for (; (lines_to_copy < line_count) &&
              (ay < actual_height); ++lines_to_copy, ++ay)
         {
             for (int x = 0, x_acc = ix_acc, ax = 0; ax < actual_width; ++ax)
@@ -1257,6 +1256,7 @@ void odroid_display_unlock()
 
 void IRAM_ATTR
 odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
+                   uint16_t *palette, uint16_t *old_palette,
                    short width, short height, short stride, uint8_t pixel_mask,
                    odroid_scanline *out_diff)
 {
@@ -1272,8 +1272,8 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
             out_diff[y].repeat = 1;
             for (int x = 0; x < width; ++x) {
                 int idx = i + x;
-                if ((old_buffer[idx] & pixel_mask) !=
-                    (buffer[idx] & pixel_mask))
+                if (old_palette[old_buffer[idx] & pixel_mask] !=
+                    palette[buffer[idx] & pixel_mask])
                 {
                     if (x < out_diff[y].left)
                       out_diff[y].left = x;
