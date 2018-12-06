@@ -378,10 +378,11 @@ void nes_emulate(void)
    nes.scanline_cycles = 0;
    nes.fiq_cycles = (int) NES_FIQ_PERIOD;
 
-   uint startTime;
-   uint stopTime;
+   int elapsedTime;
+   uint startTime, stopTime;
    uint totalElapsedTime = 0;
    int frame = 0;
+   int lostTime = 0;
    int skippedFrames = 0;
 
 
@@ -410,25 +411,27 @@ void nes_emulate(void)
 
         stopTime = xthal_get_ccount();
 
-        do_audio_frame();
-
-        int elapsedTime;
-        if (stopTime > startTime)
-          elapsedTime = (stopTime - startTime);
-        else
-          elapsedTime = ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
+        elapsedTime = (stopTime > startTime) ?
+          (stopTime - startTime) :
+          ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
 
 #if 1
         // Don't allow skipping more than one frame at a time.
         if (renderFrame && elapsedTime > frameTime) {
+            lostTime += elapsedTime - frameTime;
             renderFrame = false;
             skippedFrames++;
-            //printf("Skipping frame (elapsed: %d, frame-time: %d)\n",
-            //       elapsedTime, frameTime);
         } else {
             renderFrame = true;
         }
 #endif
+
+        do_audio_frame();
+
+        stopTime = xthal_get_ccount();
+        elapsedTime = (stopTime > startTime) ?
+          (stopTime - startTime) :
+          ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
 
         totalElapsedTime += elapsedTime;
         ++frame;
@@ -438,11 +441,12 @@ void nes_emulate(void)
           float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
           float fps = frame / seconds;
 
-          /*printf("HEAP:0x%x, FPS:%f, FRAMESKIP:%d, BATTERY:%d [%d]\n",
-                 esp_get_free_heap_size(), fps, skippedFrames,
-                 battery.millivolts, battery.percentage);*/
+          printf("HEAP:0x%x, FPS:%f, SKIP:%d, WASTE:%d, BATTERY:%d [%d]\n",
+                 esp_get_free_heap_size(), fps, skippedFrames, lostTime,
+                 battery.millivolts, battery.percentage);
 
           frame = 0;
+          lostTime = 0;
           totalElapsedTime = 0;
           skippedFrames = 0;
         }

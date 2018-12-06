@@ -247,7 +247,8 @@ static struct bitmap_meta update1 = {0,};
 static struct bitmap_meta update2 = {0,};
 static struct bitmap_meta *update = &update1;
 #define NES_VERTICAL_OVERDRAW (NES_SCREEN_HEIGHT-NES_VISIBLE_HEIGHT)
-#define INTERLACE_THRESHOLD ((NES_SCREEN_WIDTH*NES_VISIBLE_HEIGHT)/2)
+//#define INTERLACE_THRESHOLD ((NES_SCREEN_WIDTH*NES_VISIBLE_HEIGHT)/2)
+#define INTERLACE_THRESHOLD INT_MAX
 
 static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects) {
    static short interlace = 0;
@@ -264,7 +265,7 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
                       NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
                       update->stride, PIXEL_MASK, update->diff);
 
-#if 0
+#if 1
    // Because SPI is so slow, we save considerable time by cutting down how
    // much data we send while updating the screen. If we know the next screen
    // update will go over-budget, fall back to interlacing so that we might
@@ -274,7 +275,7 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
       odroid_buffer_diff_count(update->diff, NES_VISIBLE_HEIGHT) :
       NES_SCREEN_WIDTH * NES_VISIBLE_HEIGHT;
 
-   if (old_buffer && n_pixels > INTERLACE_THRESHOLD) {
+   if (old_buffer && n_pixels >= INTERLACE_THRESHOLD) {
       for (short y = 0; y < NES_VISIBLE_HEIGHT; ++y)
       {
          if (!old_buffer) {
@@ -291,10 +292,11 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
          }
       }
       interlace = 1 - interlace;
-   } else {
+   } else
+#endif
+   {
       odroid_buffer_diff_optimize(update->diff, NES_VISIBLE_HEIGHT);
    }
-#endif
 
    old_buffer = update->buffer;
 
