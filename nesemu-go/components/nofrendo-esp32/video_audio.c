@@ -260,6 +260,7 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
    update->stride = bmp->pitch;
 
    odroid_buffer_diff(update->buffer, old_buffer,
+                      myPalette, myPalette,
                       NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
                       update->stride, PIXEL_MASK, update->diff);
 

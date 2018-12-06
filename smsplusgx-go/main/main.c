@@ -631,6 +631,10 @@ void app_main(void)
 
     scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_SMS) ? false : true;
 
+    int refresh = (sms.display == DISPLAY_NTSC) ? FPS_NTSC : FPS_PAL;
+    const int frameTime = CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000 / refresh;
+    int skipFrame = 0;
+
     while (true)
     {
         odroid_gamepad_state joystick;
@@ -770,7 +774,7 @@ void app_main(void)
             }
         }
 
-        if (0 || (frame % 2) == 0)
+        if (!skipFrame)
         {
             system_frame(0);
 
@@ -793,6 +797,7 @@ void app_main(void)
 
             // Diff buffer
             odroid_buffer_diff(update->buffer, bitmap.data,
+                               render_peek_palette(), palette,
                                update->width, update->height,
                                update->stride, PIXEL_MASK, update->diff);
 
@@ -808,6 +813,13 @@ void app_main(void)
         {
             system_frame(1);
         }
+
+        // See if we need to skip a frame to keep up
+        stopTime = xthal_get_ccount();
+        int elapsedTime = (stopTime > startTime) ?
+            (stopTime - startTime) :
+            ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
+        skipFrame = (!skipFrame && elapsedTime > frameTime);
 
         // Create a buffer for audio if needed
         if (!audioBuffer || audioBufferCount < snd.sample_count)
@@ -856,15 +868,14 @@ void app_main(void)
         previousState = joystick;
 
 
-        int elapsedTime;
-        if (stopTime > startTime)
-          elapsedTime = (stopTime - startTime);
-        else
-          elapsedTime = ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
+        elapsedTime = (stopTime > startTime) ?
+            (stopTime - startTime) :
+            ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
 
         totalElapsedTime += elapsedTime;
         ++frame;
 
+#if 0
         if (frame == 60)
         {
           float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
@@ -876,5 +887,6 @@ void app_main(void)
           frame = 0;
           totalElapsedTime = 0;
         }
+#endif
     }
 }

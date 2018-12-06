@@ -981,6 +981,11 @@ static inline void remap_8_to_16(int line)
  #endif
 }
 
+extern uint16* render_peek_palette()
+{
+    return pixel;
+}
+
 void render_copy_palette(uint16* palette)
 {
     memcpy(palette, pixel, sizeof(pixel));

@@ -47,6 +47,7 @@ extern void render_line(int line);
 extern void render_bg_sms(int line);
 extern void render_obj_sms(int line);
 extern void palette_sync(int index);
+extern uint16* render_peek_palette();
 extern void render_copy_palette(uint16* palette);
 
 #endif /* _RENDER_H_ */
