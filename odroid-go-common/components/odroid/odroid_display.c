@@ -141,7 +141,7 @@ DRAM_ATTR static const ili_init_cmd_t ili_init_cmds[] = {
     {0, {0}, 0xff}
 };
 
-static uint16_t* line_buffer_get()
+static inline uint16_t* line_buffer_get()
 {
     uint16_t* buffer;
     if (xQueueReceive(line_buffer_queue, &buffer, 1000 / portTICK_RATE_MS) != pdTRUE)
@@ -152,7 +152,7 @@ static uint16_t* line_buffer_get()
     return buffer;
 }
 
-void line_buffer_put(uint16_t* buffer)
+static inline void line_buffer_put(uint16_t* buffer)
 {
     if (xQueueSend(line_buffer_queue, &buffer, 1000 / portTICK_RATE_MS) != pdTRUE)
     {
@@ -160,7 +160,7 @@ void line_buffer_put(uint16_t* buffer)
     }
 }
 
-static void spi_task(void *arg)
+static void IRAM_ATTR spi_task(void *arg)
 {
     printf("%s: Entered.\n", __func__);
 
@@ -215,7 +215,7 @@ static void spi_initialize()
 
 
 
-static spi_transaction_t* spi_get_transaction()
+static spi_transaction_t* IRAM_ATTR spi_get_transaction()
 {
     spi_transaction_t* t;
 
@@ -230,7 +230,7 @@ static spi_transaction_t* spi_get_transaction()
     return t;
 }
 
-static void spi_put_transaction(spi_transaction_t* t)
+static void IRAM_ATTR spi_put_transaction(spi_transaction_t* t)
 {
     t->rx_buffer = NULL;
     t->rxlength = t->length;
@@ -255,7 +255,7 @@ static void spi_put_transaction(spi_transaction_t* t)
 
 
 //Send a command to the ILI9341. Uses spi_device_transmit, which waits until the transfer is complete.
-static void ili_cmd(const uint8_t cmd)
+static void IRAM_ATTR ili_cmd(const uint8_t cmd)
 {
     spi_transaction_t* t = spi_get_transaction();
 
@@ -268,7 +268,7 @@ static void ili_cmd(const uint8_t cmd)
 }
 
 //Send data to the ILI9341. Uses spi_device_transmit, which waits until the transfer is complete.
-static void ili_data(const uint8_t *data, int len)
+static void IRAM_ATTR ili_data(const uint8_t *data, int len)
 {
     if (len)
     {
@@ -298,7 +298,7 @@ static void ili_data(const uint8_t *data, int len)
 
 //This function is called (in irq context!) just before a transmission starts. It will
 //set the D/C line to the value indicated in the user field.
-static void ili_spi_pre_transfer_callback(spi_transaction_t *t)
+static void IRAM_ATTR ili_spi_pre_transfer_callback(spi_transaction_t *t)
 {
     int dc=(int)t->user & 0x01;
     gpio_set_level(LCD_PIN_NUM_DC, dc);
@@ -330,44 +330,53 @@ static void ili_init()
     }
 }
 
-
-void send_reset_drawing(int left, int top, int width, int height, int cont)
+static inline void send_reset_column(int left, int right)
 {
-    ili_cmd(0x2A);          //Column address set
-
-    const int right = left + width - 1;
+    ili_cmd(0x2A);
     const uint8_t data1[] = { (left) >> 8, (left) & 0xff, right >> 8, right & 0xff };
     ili_data(data1, 4);
+}
 
-    ili_cmd(0x2B);          //Page address set
-
-    const int bottom = (top + height - 1);
+static inline void send_reset_page(int top, int bottom)
+{
+    ili_cmd(0x2B);
     const uint8_t data2[] = { top >> 8, top & 0xff, bottom >> 8, bottom & 0xff };
     ili_data(data2, 4);
+}
+
+void IRAM_ATTR send_reset_drawing(int left, int top, int width, int height, int cont)
+{
+    static int last_left = -1;
+    static int last_right = -1;
+    static int last_top = -1;
+    static int last_bottom = -1;
+
+    const int right = left + width - 1;
+    if (left != last_left || right != last_right) {
+        send_reset_column(left, right);
+    }
+
+    const int bottom = (top + height - 1);
+    if (top != last_top || bottom != last_bottom) {
+        send_reset_page(top, bottom);
+    }
 
     if (cont) {
+        last_left = last_right = last_top = last_bottom = -1;
         ili_cmd(0x2C);           //memory write
+    } else {
+        last_left = left;
+        last_right = right;
+        last_top = top;
+        last_bottom = bottom;
     }
 }
 
-void send_continue_line(uint16_t *line, int width, int lineCount)
+void IRAM_ATTR send_continue_line(uint16_t *line, int width, int lineCount)
 {
-    spi_transaction_t* t;
+    ili_cmd(0x3C);
 
-
-    t = spi_get_transaction();
-
-    //ili_cmd(0x3C);
-    t->tx_data[0] = 0x3C;   //memory write continue
-    t->length = 8;
-    t->user = (void*)0;
-    t->flags = SPI_TRANS_USE_TXDATA;
-
-    spi_put_transaction(t);
-
-
-    t = spi_get_transaction();
-
+    spi_transaction_t* t = spi_get_transaction();
     t->length = width * 2 * lineCount * 8;
     t->tx_buffer = line;
     t->user = (void*)0x81;
@@ -376,7 +385,7 @@ void send_continue_line(uint16_t *line, int width, int lineCount)
     spi_put_transaction(t);
 }
 
-void send_write_line(uint16_t *line, int width)
+void IRAM_ATTR send_write_line(uint16_t *line, int width)
 {
     ili_cmd(0x2C);  // Memory write
 
@@ -914,6 +923,8 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 
     odroid_display_lock();
 
+    spi_device_acquire_bus(spi, portMAX_DELAY);
+
     float scale;
     int origin_x, origin_y, x_inc, y_inc, poll_threshold;
     if (do_scale) {
@@ -941,17 +952,27 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
         poll_threshold = POLLING_PIXEL_THRESHOLD;
     }
 
+#if 1
     if (diff) {
         int n_pixels = odroid_buffer_diff_count(diff, height);
         if (n_pixels * scale > PARTIAL_UPDATE_THRESHOLD) {
             diff = NULL;
         }
     }
+#endif
 
     bool need_polling_updates = false;
     int left = 0;
     int line_width = width;
     int repeat = 0;
+
+#if 0
+    // Make all updates interrupt updates
+    poll_threshold = 0;
+#elif 0
+    // Make all updates polling updates
+    poll_threshold = INT_MAX;
+#endif
 
     for (int y = 0, i = 0; y < height; ++y, i += stride, --repeat)
     {
@@ -965,14 +986,15 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
             repeat = height;
         }
 
-        int n_pixels = line_width * repeat;
-
-        if (n_pixels >= poll_threshold) {
-            write_rect(buffer, palette, origin_x, origin_y,
-                       left, y, line_width, repeat, i + left, stride,
-                       pixel_mask, x_inc, y_inc);
-        } else if (line_width > 0) {
-            need_polling_updates = true;
+        if (line_width > 0) {
+            int n_pixels = line_width * repeat;
+            if (n_pixels >= poll_threshold) {
+                write_rect(buffer, palette, origin_x, origin_y,
+                           left, y, line_width, repeat, i + left, stride,
+                           pixel_mask, x_inc, y_inc);
+            } else {
+                need_polling_updates = true;
+            }
         }
     }
 
@@ -995,16 +1017,20 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
                 repeat = height;
             }
 
-            int n_pixels = line_width * repeat;
 
-            if (line_width && n_pixels < poll_threshold) {
-                write_rect(buffer, palette, origin_x, origin_y,
-                           left, y, line_width, repeat, i + left, stride,
-                           pixel_mask, x_inc, y_inc);
+            if (line_width) {
+                int n_pixels = line_width * repeat;
+                if (n_pixels < poll_threshold) {
+                    write_rect(buffer, palette, origin_x, origin_y,
+                               left, y, line_width, repeat, i + left, stride,
+                               pixel_mask, x_inc, y_inc);
+                }
             }
         }
         use_polling = false;
     }
+
+    spi_device_release_bus(spi);
 
     odroid_display_unlock();
 }
