@@ -271,11 +271,16 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
    // avoid skipping a frame
 
    int n_pixels = old_buffer ?
-      odroid_buffer_diff_count(update->diff, NES_VISIBLE_HEIGHT) : 0;
+      odroid_buffer_diff_count(update->diff, NES_VISIBLE_HEIGHT) :
+      NES_SCREEN_WIDTH * NES_VISIBLE_HEIGHT;
 
    if (old_buffer && n_pixels > INTERLACE_THRESHOLD) {
       for (short y = 0; y < NES_VISIBLE_HEIGHT; ++y)
       {
+         if (!old_buffer) {
+            update->diff[y].left = 0;
+            update->diff[y].width = NES_SCREEN_WIDTH;
+         }
          update->diff[y].repeat = 1;
          if ((y + interlace) % 2)
          {
@@ -286,6 +291,8 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
          }
       }
       interlace = 1 - interlace;
+   } else {
+      odroid_buffer_diff_optimize(update->diff, NES_VISIBLE_HEIGHT);
    }
 #endif
 
@@ -308,6 +315,9 @@ static void videoTask(void *arg) {
     videoTaskIsRunning = true;
     while(1)
     {
+        // We could actually receive here and run the next frame of emulation
+        // in parallel with updating the screen, but limited bandwidth means it
+        // has a nasty visible effect on the screen update.
         xQueuePeek(vidQueue, &data, portMAX_DELAY);
 
         if (!data) {

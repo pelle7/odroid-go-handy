@@ -1285,27 +1285,32 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
             }
         }
 
-        // Run through and count how many lines each particular run has
-        // so that we can optimise and use write_continue and save on SPI
-        // bandwidth.
-        // Because of the bandwidth required to setup the page/column
-        // address, etc., it can actually cost more to run setup than just
-        // transfer the extra pixels.
-        for (short y = height - 1; y > 0; --y) {
-            int left_diff = abs(out_diff[y].left - out_diff[y-1].left);
-            if (left_diff > 8) continue;
+    }
+}
 
-            int right = out_diff[y].left + out_diff[y].width;
-            int right_prev = out_diff[y-1].left + out_diff[y-1].width;
-            int right_diff = abs(right - right_prev);
-            if (right_diff > 8) continue;
+void IRAM_ATTR
+odroid_buffer_diff_optimize(odroid_scanline *diff, short height)
+{
+    // Run through and count how many lines each particular run has
+    // so that we can optimise and use write_continue and save on SPI
+    // bandwidth.
+    // Because of the bandwidth required to setup the page/column
+    // address, etc., it can actually cost more to run setup than just
+    // transfer the extra pixels.
+    for (short y = height - 1; y > 0; --y) {
+        int left_diff = abs(diff[y].left - diff[y-1].left);
+        if (left_diff > 8) continue;
 
-            if (out_diff[y].left < out_diff[y-1].left)
-              out_diff[y-1].left = out_diff[y].left;
-            out_diff[y-1].width = (right > right_prev) ?
-              right - out_diff[y-1].left : right_prev - out_diff[y-1].left;
-            out_diff[y-1].repeat = out_diff[y].repeat + 1;
-        }
+        int right = diff[y].left + diff[y].width;
+        int right_prev = diff[y-1].left + diff[y-1].width;
+        int right_diff = abs(right - right_prev);
+        if (right_diff > 8) continue;
+
+        if (diff[y].left < diff[y-1].left)
+          diff[y-1].left = diff[y].left;
+        diff[y-1].width = (right > right_prev) ?
+          right - diff[y-1].left : right_prev - diff[y-1].left;
+        diff[y-1].repeat = diff[y].repeat + 1;
     }
 }
 

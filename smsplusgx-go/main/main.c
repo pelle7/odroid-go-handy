@@ -800,6 +800,7 @@ void app_main(void)
                                render_peek_palette(), palette,
                                update->width, update->height,
                                update->stride, PIXEL_MASK, update->diff);
+            odroid_buffer_diff_optimize(update->diff, update->height);
 
             // Send update data to video queue on other core
             void *arg = (void*)update;

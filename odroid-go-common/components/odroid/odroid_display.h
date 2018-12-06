@@ -43,4 +43,5 @@ void odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
                         short width, short height, short stride,
                         uint8_t pixel_mask,
                         odroid_scanline *out_diff);
+void odroid_buffer_diff_optimize(odroid_scanline *diff, short height);
 int odroid_buffer_diff_count(odroid_scanline *diff, short height);
