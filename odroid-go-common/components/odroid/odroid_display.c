@@ -952,7 +952,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
         poll_threshold = POLLING_PIXEL_THRESHOLD;
     }
 
-#if 1
+#if 0
     if (diff) {
         int n_pixels = odroid_buffer_diff_count(diff, height);
         if (n_pixels * scale > PARTIAL_UPDATE_THRESHOLD) {
@@ -1287,9 +1287,11 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
                    odroid_scanline *out_diff)
 {
     if (!old_buffer) {
-        out_diff[0].left = 0;
-        out_diff[0].width = width;
-        out_diff[0].repeat = height;
+        for (short y = 0; y < height; ++y) {
+            out_diff[y].left = 0;
+            out_diff[y].width = width;
+            out_diff[y].repeat = height - y;
+        }
     } else {
         int i = 0;
         for (short y = 0; y < height; ++y, i += stride) {
