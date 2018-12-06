@@ -304,13 +304,15 @@ void IRAM_ATTR nes_nmi(void)
 
 static void nes_renderframe(bool draw_flag)
 {
+   static short interlace = 0;
    int elapsed_cycles;
    mapintf_t *mapintf = nes.mmc->intf;
    int in_vblank = 0;
 
    while (262 != nes.scanline)
    {
-      ppu_scanline(nes.vidbuf, nes.scanline, draw_flag);
+      bool draw_scanline = draw_flag && ((nes.scanline % 2) ^ interlace);
+      ppu_scanline(nes.vidbuf, nes.scanline, draw_scanline);
 
       if (241 == nes.scanline)
       {
@@ -337,6 +339,8 @@ static void nes_renderframe(bool draw_flag)
       ppu_endscanline(nes.scanline);
       nes.scanline++;
    }
+
+   if (draw_flag) interlace = 1 - interlace;
 
    nes.scanline = 0;
 }
