@@ -59,7 +59,7 @@
 
 #define PIXEL_MASK 0x3F
 
-struct bitmap_meta {
+struct update_meta {
     odroid_scanline diff[NES_VISIBLE_HEIGHT];
     uint8_t *buffer;
     int stride;
@@ -69,6 +69,9 @@ odroid_volume_level Volume;
 odroid_battery_state battery;
 int scaling_enabled = 1;
 int previous_scaling_enabled = 1;
+TaskHandle_t ioTask;
+TaskHandle_t mainTask;
+
 
 //Seemingly, this will be called only once. Should call func with a freq of frequency,
 int osd_installtimer(int frequency, void *func, int funcsize, void *counter, int countersize)
@@ -81,34 +84,34 @@ int osd_installtimer(int frequency, void *func, int funcsize, void *counter, int
 ** Audio
 */
 static void (*audio_callback)(void *buffer, int length) = NULL;
+
 #if CONFIG_SOUND_ENA
-		QueueHandle_t queue;
-		static int16_t *audio_frame;
+static int16_t *audio_frame;
 #endif
 
 void do_audio_frame() {
 #if CONFIG_SOUND_ENA
-		int remaining = DEFAULT_SAMPLERATE / NES_REFRESH_RATE;
-		while(remaining)
-		{
-			int n=DEFAULT_FRAGSIZE;
-			if (n>remaining) n=remaining;
+   int remaining = DEFAULT_SAMPLERATE / NES_REFRESH_RATE;
+   while(remaining)
+   {
+      int n=DEFAULT_FRAGSIZE;
+      if (n>remaining) n=remaining;
 
-			audio_callback(audio_frame, n); //get more data
+      audio_callback(audio_frame, n); //get more data
 
-			//16 bit mono -> 32-bit (16 bit r+l)
-			for (int i=n-1; i>=0; i--)
-			{
-				int sample = (int)audio_frame[i];
+      //16 bit mono -> 32-bit (16 bit r+l)
+      for (int i=n-1; i>=0; i--)
+      {
+         int sample = (int)audio_frame[i];
 
-				audio_frame[i*2]= (short)sample;
-                audio_frame[i*2+1] = (short)sample;
-			}
+         audio_frame[i*2]= (short)sample;
+         audio_frame[i*2+1] = (short)sample;
+      }
 
-            odroid_audio_submit(audio_frame, n);
+      odroid_audio_submit(audio_frame, n);
 
-			remaining -= n;
-		}
+      remaining -= n;
+   }
 #endif
 }
 
@@ -128,9 +131,9 @@ static int osd_init_sound(void)
 {
 #if CONFIG_SOUND_ENA
 
-	audio_frame=malloc(4*DEFAULT_FRAGSIZE);
+   audio_frame=malloc(4*DEFAULT_FRAGSIZE);
 
-    odroid_audio_init(odroid_settings_AudioSink_get(), DEFAULT_SAMPLERATE);
+   odroid_audio_init(odroid_settings_AudioSink_get(), DEFAULT_SAMPLERATE);
 
 #endif
 
@@ -158,8 +161,6 @@ static bitmap_t *lock_write(void);
 static void free_write(int num_dirties, rect_t *dirty_rects);
 static void custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects);
 static char fb[1]; //dummy
-
-QueueHandle_t vidQueue;
 
 viddriver_t sdlDriver =
 {
@@ -243,9 +244,9 @@ static void free_write(int num_dirties, rect_t *dirty_rects)
 }
 
 static uint8_t *old_buffer = NULL;
-static struct bitmap_meta update1 = {0,};
-static struct bitmap_meta update2 = {0,};
-static struct bitmap_meta *update = &update2;
+static struct update_meta update1 = {0,};
+static struct update_meta update2 = {0,};
+static struct update_meta *update = &update2;
 #define NES_VERTICAL_OVERDRAW (NES_SCREEN_HEIGHT-NES_VISIBLE_HEIGHT)
 #define INTERLACE_THRESHOLD ((NES_SCREEN_WIDTH*NES_VISIBLE_HEIGHT)/2)
 
@@ -253,10 +254,12 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
    static short interlace = 0;
 
    if (!bmp) {
-      return;
+      printf("custom_blit called with NULL bitmap!\n");
+      abort();
    }
 
    uint8_t *new_buffer = bmp->line[NES_VERTICAL_OVERDRAW/2];
+#if 1
    if (old_buffer) {
       // Copy the lines we aren't going to draw from the old buffer so we can
       // still keep track of changes.
@@ -269,18 +272,20 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
          memcpy(&new_buffer[idx], &old_buffer[idx], update->diff[actual_y].width);
       }
    }
-
-   interlace = 1 - interlace;
+#endif
 
    // Flip the update struct so we can keep track of the changes in the last
    // frame.
    update = (update == &update1) ? &update2 : &update1;
+
+   interlace = 1 - interlace;
 
    // Fill in the update struct
    update->buffer = new_buffer;
    update->stride = bmp->pitch;
 
    //printf("Diffing...\n");
+#if 1
    odroid_buffer_diff(update->buffer + (interlace * update->stride),
                       old_buffer ? old_buffer + (interlace * update->stride) : NULL,
                       myPalette, myPalette,
@@ -303,42 +308,72 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
          update->diff[y].width = 0;
       }
    }
+#else
+   for (short y = 0; y < NES_VISIBLE_HEIGHT; ++y) {
+      update->diff[y].repeat = 1;
+      if ((y % 2) ^ interlace) {
+         update->diff[y].width = 0;
+      } else {
+         update->diff[y].left = 0;
+         update->diff[y].width = NES_SCREEN_WIDTH;
+      }
+   }
+#endif
 
    //odroid_buffer_diff_optimize(update->diff, NES_VISIBLE_HEIGHT);
 
    old_buffer = update->buffer;
 
    //printf("Sending...\n");
-   void* arg = (void*)update;
-   xQueueSend(vidQueue, &arg, portMAX_DELAY);
+   if (xTaskNotifyWait(0, ULONG_MAX, NULL, portMAX_DELAY) != pdPASS)
+   {
+      printf("Failed to wait for IO task\n");
+   }
+   if (xTaskNotify(ioTask, (update == &update1) ? 1 : 2,
+                   eSetValueWithoutOverwrite) != pdPASS)
+   {
+      printf("Failed to notify IO task\n");
+   }
 }
 
 
 //This runs on core 1.
-volatile bool videoTaskIsRunning = false;
-static void videoTask(void *arg) {
-    void* data = NULL;
-
-    videoTaskIsRunning = true;
+volatile bool ioTaskIsRunning = false;
+static void ioTaskCallback(void *arg) {
+    ioTaskIsRunning = true;
     while(1)
     {
         // We could actually receive here and run the next frame of emulation
         // in parallel with updating the screen, but limited bandwidth means it
         // has a nasty visible effect on the screen update.
-        xQueuePeek(vidQueue, &data, portMAX_DELAY);
-
-        if (!data) {
-            break;
+        uint32_t taskId;
+        if (xTaskNotifyWait(0, ULONG_MAX, &taskId, portMAX_DELAY) != pdPASS)
+        {
+           printf("xTaskNotifyWait failed in ioTask()\n");
+           continue;
         }
 
-        struct bitmap_meta *update = data;
+        struct update_meta *update;
+        if (taskId == 0) {
+           // Exit
+           break;
+        } else if (taskId == 1) {
+           // Update on update object number 1
+           update = &update1;
+        } else if (taskId == 2) {
+           // Update on update object number 2
+           update = &update2;
+        } else {
+           printf("Unrecognised task!\n");
+           continue;
+        }
 
         bool scale_changed = (previous_scaling_enabled != scaling_enabled);
         if (scale_changed)
         {
-            // Clear display
-            ili9341_blank_screen();
-            previous_scaling_enabled = scaling_enabled;
+           // Clear display
+           ili9341_blank_screen();
+           previous_scaling_enabled = scaling_enabled;
         }
 
         ili9341_write_frame_8bit(update->buffer,
@@ -349,7 +384,10 @@ static void videoTask(void *arg) {
 
         odroid_input_battery_level_read(&battery);
 
-        xQueueReceive(vidQueue, &data, portMAX_DELAY);
+        if (xTaskNotify(mainTask, 1, eSetValueWithoutOverwrite) != pdPASS)
+        {
+           printf("Failed to notify main task\n");
+        }
     }
 
 
@@ -358,7 +396,7 @@ static void videoTask(void *arg) {
     odroid_display_unlock();
     //odroid_display_drain_spi();
 
-    videoTaskIsRunning = false;
+    ioTaskIsRunning = false;
 
     vTaskDelete(NULL);
 
@@ -398,9 +436,8 @@ static void PowerDown()
     // Clear audio to prevent studdering
     odroid_audio_terminate();
 
-    void *exitVideoTask = NULL;
-    xQueueSend(vidQueue, &exitVideoTask, portMAX_DELAY);
-    while (videoTaskIsRunning) { vTaskDelay(10); }
+    xTaskNotify(ioTask, 0, eSetValueWithOverwrite);
+    while (ioTaskIsRunning) { vTaskDelay(10); }
 
 
     // state
@@ -503,9 +540,8 @@ static int ConvertJoystickInput()
 
         odroid_audio_terminate();
 
-        void *exitVideoTask = NULL;
-        xQueueSend(vidQueue, &exitVideoTask, portMAX_DELAY);
-        while (videoTaskIsRunning) { vTaskDelay(10); }
+        xTaskNotify(ioTask, 0, eSetValueWithOverwrite);
+        while (ioTaskIsRunning) { vTaskDelay(10); }
 
         //odroid_display_drain_spi();
 
@@ -611,9 +647,12 @@ int osd_init()
 
    ili9341_blank_screen();
 
-
-   vidQueue = xQueueCreate(1, sizeof(struct bitmap_meta *));
-   xTaskCreatePinnedToCore(&videoTask, "videoTask", 2048, NULL, 5, NULL, 1);
+   mainTask = xTaskGetCurrentTaskHandle();
+   xTaskCreatePinnedToCore(&ioTaskCallback, "ioTask", 2048, NULL, 5, &ioTask, 1);
+   if (xTaskNotify(ioTask, 1, eSetValueWithoutOverwrite) != pdPASS) {
+      printf("Failed to notify IO task during initialisation\n");
+      abort();
+   }
 
    osd_initinput();
 

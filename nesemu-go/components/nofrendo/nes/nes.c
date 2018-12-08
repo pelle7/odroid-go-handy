@@ -347,28 +347,30 @@ static void nes_renderframe(bool draw_flag)
 
 static void system_video(bool draw)
 {
-   /* TODO: hack */
-   if (false == draw)
-   {
-      //gui_frame(false);
+   if (!draw) {
       return;
    }
 
-   /* blit the NES screen to our video surface */
+   /* Swap buffer to primary */
    vid_swap(&nes.vidbuf);
 
    /* overlay our GUI on top of it */
    //gui_frame(true);
 
-   /* blit to screen */
+   /* Flush buffer to screen */
    vid_flush();
-
-   /* grab input */
-   osd_getinput();
 }
 
 extern void do_audio_frame();
 extern bool forceConsoleReset;
+
+static inline int
+get_elapsed_time(uint startTime, uint stopTime)
+{
+   return (stopTime > startTime) ?
+      stopTime - startTime :
+      ((uint64_t)stopTime + (uint64_t)0xffffffff) - startTime;
+}
 
 /* main emulation loop */
 void nes_emulate(void)
@@ -386,14 +388,13 @@ void nes_emulate(void)
    uint startTime, stopTime;
    uint totalElapsedTime = 0;
    int frame = 0;
-   int lostTime = 0;
    int skippedFrames = 0;
 
 
    for (int i = 0; i < 4; ++i)
    {
+       osd_getinput();
        nes_renderframe(1);
-       system_video(1);
    }
 
    load_sram();
@@ -410,21 +411,18 @@ void nes_emulate(void)
    {
        startTime = xthal_get_ccount();
 
+        osd_getinput();
         nes_renderframe(renderFrame);
         system_video(renderFrame);
 
-        stopTime = xthal_get_ccount();
-
-        elapsedTime = (stopTime > startTime) ?
-          (stopTime - startTime) :
-          ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
-
 #if 1
+        stopTime = xthal_get_ccount();
+        elapsedTime = get_elapsed_time(startTime, stopTime);
+
         // Don't allow skipping more than one frame at a time.
         if (renderFrame && elapsedTime > frameTime) {
-            lostTime += elapsedTime - frameTime;
             renderFrame = false;
-            skippedFrames++;
+            ++skippedFrames;
         } else {
             renderFrame = true;
         }
@@ -433,24 +431,20 @@ void nes_emulate(void)
         do_audio_frame();
 
         stopTime = xthal_get_ccount();
-        elapsedTime = (stopTime > startTime) ?
-          (stopTime - startTime) :
-          ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
-
+        elapsedTime = get_elapsed_time(startTime, stopTime);
         totalElapsedTime += elapsedTime;
         ++frame;
 
         if (frame == 60)
         {
           float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
-          float fps = frame / seconds;
+          float fps = (60 - skippedFrames) / (frame / seconds) * 60.f;
 
-          printf("HEAP:0x%x, FPS:%f, SKIP:%d, WASTE:%d, BATTERY:%d [%d]\n",
-                 esp_get_free_heap_size(), fps, skippedFrames, lostTime,
+          printf("HEAP:0x%x, FPS:%f, SKIP:%d, BATTERY:%d [%d]\n",
+                 esp_get_free_heap_size(), fps, skippedFrames,
                  battery.millivolts, battery.percentage);
 
           frame = 0;
-          lostTime = 0;
           totalElapsedTime = 0;
           skippedFrames = 0;
         }
