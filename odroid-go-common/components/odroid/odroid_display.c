@@ -160,7 +160,7 @@ static inline void line_buffer_put(uint16_t* buffer)
     }
 }
 
-static void IRAM_ATTR spi_task(void *arg)
+static void spi_task(void *arg)
 {
     printf("%s: Entered.\n", __func__);
 
@@ -215,7 +215,7 @@ static void spi_initialize()
 
 
 
-static spi_transaction_t* IRAM_ATTR spi_get_transaction()
+static spi_transaction_t* spi_get_transaction()
 {
     spi_transaction_t* t;
 
@@ -230,7 +230,7 @@ static spi_transaction_t* IRAM_ATTR spi_get_transaction()
     return t;
 }
 
-static void IRAM_ATTR spi_put_transaction(spi_transaction_t* t)
+static void spi_put_transaction(spi_transaction_t* t)
 {
     t->rx_buffer = NULL;
     t->rxlength = t->length;
@@ -255,7 +255,7 @@ static void IRAM_ATTR spi_put_transaction(spi_transaction_t* t)
 
 
 //Send a command to the ILI9341. Uses spi_device_transmit, which waits until the transfer is complete.
-static void IRAM_ATTR ili_cmd(const uint8_t cmd)
+static void ili_cmd(const uint8_t cmd)
 {
     spi_transaction_t* t = spi_get_transaction();
 
@@ -268,7 +268,7 @@ static void IRAM_ATTR ili_cmd(const uint8_t cmd)
 }
 
 //Send data to the ILI9341. Uses spi_device_transmit, which waits until the transfer is complete.
-static void IRAM_ATTR ili_data(const uint8_t *data, int len)
+static void ili_data(const uint8_t *data, int len)
 {
     if (len)
     {
@@ -298,7 +298,7 @@ static void IRAM_ATTR ili_data(const uint8_t *data, int len)
 
 //This function is called (in irq context!) just before a transmission starts. It will
 //set the D/C line to the value indicated in the user field.
-static void IRAM_ATTR ili_spi_pre_transfer_callback(spi_transaction_t *t)
+static void ili_spi_pre_transfer_callback(spi_transaction_t *t)
 {
     int dc=(int)t->user & 0x01;
     gpio_set_level(LCD_PIN_NUM_DC, dc);
@@ -344,7 +344,7 @@ static inline void send_reset_page(int top, int bottom)
     ili_data(data2, 4);
 }
 
-void IRAM_ATTR send_reset_drawing(int left, int top, int width, int height, int cont)
+void send_reset_drawing(int left, int top, int width, int height, int cont)
 {
     static int last_left = -1;
     static int last_right = -1;
@@ -372,7 +372,7 @@ void IRAM_ATTR send_reset_drawing(int left, int top, int width, int height, int 
     }
 }
 
-void IRAM_ATTR send_continue_line(uint16_t *line, int width, int lineCount)
+void send_continue_line(uint16_t *line, int width, int lineCount)
 {
     ili_cmd(0x3C);
 
@@ -385,7 +385,7 @@ void IRAM_ATTR send_continue_line(uint16_t *line, int width, int lineCount)
     spi_put_transaction(t);
 }
 
-void IRAM_ATTR send_write_line(uint16_t *line, int width)
+void send_write_line(uint16_t *line, int width)
 {
     ili_cmd(0x2C);  // Memory write
 
@@ -821,7 +821,7 @@ void ili9341_blank_screen()
     odroid_display_unlock();
 }
 
-static void IRAM_ATTR
+static void
 write_rect(uint8_t *buffer, uint16_t *palette,
            int origin_x, int origin_y,
            int left, int top, int width, int height,
@@ -910,7 +910,7 @@ write_rect(uint8_t *buffer, uint16_t *palette,
     }
 }
 
-void IRAM_ATTR
+void
 ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
                          short width, short height, short stride,
                          uint8_t pixel_mask, uint16_t* palette,
