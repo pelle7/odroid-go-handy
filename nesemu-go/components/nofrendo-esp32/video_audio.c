@@ -159,7 +159,7 @@ static void set_palette(rgb_t *pal);
 static void clear(uint8 color);
 static bitmap_t *lock_write(void);
 static void free_write(int num_dirties, rect_t *dirty_rects);
-static void custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects);
+static void custom_blit(bitmap_t *bmp, short interlace);
 static char fb[1]; //dummy
 
 viddriver_t sdlDriver =
@@ -250,9 +250,7 @@ static struct update_meta *update = &update2;
 #define NES_VERTICAL_OVERDRAW (NES_SCREEN_HEIGHT-NES_VISIBLE_HEIGHT)
 #define INTERLACE_THRESHOLD ((NES_SCREEN_WIDTH*NES_VISIBLE_HEIGHT)/2)
 
-static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_rects) {
-   static short interlace = 0;
-
+static void IRAM_ATTR custom_blit(bitmap_t *bmp, short interlace) {
    if (!bmp) {
       printf("custom_blit called with NULL bitmap!\n");
       abort();
@@ -260,11 +258,11 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
 
    uint8_t *new_buffer = bmp->line[NES_VERTICAL_OVERDRAW/2];
 #if 1
-   if (old_buffer) {
+   if (old_buffer && interlace >= 0) {
       // Copy the lines we aren't going to draw from the old buffer so we can
       // still keep track of changes.
       for (short y = 0; y < NES_VISIBLE_HEIGHT/2; ++y) {
-         int actual_y = (y * 2) + interlace;
+         int actual_y = (y * 2) + (1 - interlace);
          /*printf("Copying old scanline %d (%d, %d)\n", actual_y,
                 update->diff[actual_y].left, update->diff[actual_y].width);*/
          if (!update->diff[actual_y].width) continue;
@@ -278,53 +276,33 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, int num_dirties, rect_t *dirty_
    // frame.
    update = (update == &update1) ? &update2 : &update1;
 
-   interlace = 1 - interlace;
-
    // Fill in the update struct
    update->buffer = new_buffer;
    update->stride = bmp->pitch;
 
    //printf("Diffing...\n");
-#if 1
-   odroid_buffer_diff(update->buffer + (interlace * update->stride),
-                      old_buffer ? old_buffer + (interlace * update->stride) : NULL,
-                      myPalette, myPalette,
-                      NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT / 2,
-                      update->stride * 2, PIXEL_MASK, update->diff);
-
-   // Because SPI is so slow, we save considerable time by cutting down how
-   // much data we send while updating the screen. If we know the next screen
-   // update will go over-budget, fall back to interlacing so that we might
-   // avoid skipping a frame
-
-   /*int n_pixels = old_buffer ?
-      odroid_buffer_diff_count(update->diff, NES_VISIBLE_HEIGHT / 2) :
-      NES_SCREEN_WIDTH * NES_VISIBLE_HEIGHT;*/
-
-   //printf("Correcting...\n");
-   for (short y = NES_VISIBLE_HEIGHT - 1; y >= 0; --y) {
-      update->diff[y] = update->diff[y/2];
-      if ((y % 2) ^ interlace) {
-         update->diff[y].width = 0;
+   if (interlace >= 0) {
+      odroid_buffer_diff(update->buffer + (interlace * update->stride),
+                         old_buffer ? old_buffer + (interlace * update->stride) : NULL,
+                         myPalette, myPalette,
+                         NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT / 2,
+                         update->stride * 2, PIXEL_MASK, update->diff);
+      for (short y = NES_VISIBLE_HEIGHT - 1; y >= 0; --y) {
+         update->diff[y] = update->diff[y/2];
+         if ((y % 2) ^ interlace) {
+            update->diff[y].width = 0;
+         }
       }
+   } else {
+      odroid_buffer_diff(update->buffer, old_buffer,
+                         myPalette, myPalette,
+                         NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
+                         update->stride, PIXEL_MASK, update->diff);
+      odroid_buffer_diff_optimize(update->diff, NES_VISIBLE_HEIGHT);
    }
-#else
-   for (short y = 0; y < NES_VISIBLE_HEIGHT; ++y) {
-      update->diff[y].repeat = 1;
-      if ((y % 2) ^ interlace) {
-         update->diff[y].width = 0;
-      } else {
-         update->diff[y].left = 0;
-         update->diff[y].width = NES_SCREEN_WIDTH;
-      }
-   }
-#endif
-
-   //odroid_buffer_diff_optimize(update->diff, NES_VISIBLE_HEIGHT);
 
    old_buffer = update->buffer;
 
-   //printf("Sending...\n");
    if (xTaskNotifyWait(0, ULONG_MAX, NULL, portMAX_DELAY) != pdPASS)
    {
       printf("Failed to wait for IO task\n");

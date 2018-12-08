@@ -57,7 +57,13 @@
 
 #define  NES_SKIP_LIMIT       (NES_REFRESH_RATE / 5)   /* 12 or 10, depending on PAL/NTSC */
 
+
+#define FRAME_CHECK 4
+#define INTERLACE_ON_THRESHOLD 2
+#define INTERLACE_OFF_THRESHOLD 4
+
 extern odroid_battery_state battery;
+static short interlace = -1;
 
 static nes_t nes;
 
@@ -304,14 +310,14 @@ void IRAM_ATTR nes_nmi(void)
 
 static void nes_renderframe(bool draw_flag)
 {
-   static short interlace = 0;
    int elapsed_cycles;
    mapintf_t *mapintf = nes.mmc->intf;
    int in_vblank = 0;
 
    while (262 != nes.scanline)
    {
-      bool draw_scanline = draw_flag && ((nes.scanline % 2) ^ interlace);
+      bool draw_scanline = draw_flag &&
+          ((interlace < 0) || ((nes.scanline % 2) ^ interlace));
       ppu_scanline(nes.vidbuf, nes.scanline, draw_scanline);
 
       if (241 == nes.scanline)
@@ -340,7 +346,7 @@ static void nes_renderframe(bool draw_flag)
       nes.scanline++;
    }
 
-   if (draw_flag) interlace = 1 - interlace;
+   if (draw_flag && interlace >= 0) interlace = 1 - interlace;
 
    nes.scanline = 0;
 }
@@ -358,7 +364,7 @@ static void system_video(bool draw)
    //gui_frame(true);
 
    /* Flush buffer to screen */
-   vid_flush();
+   vid_flush(interlace);
 }
 
 extern void do_audio_frame();
@@ -389,6 +395,8 @@ void nes_emulate(void)
    uint totalElapsedTime = 0;
    int frame = 0;
    int skippedFrames = 0;
+   int interlacedFrames = 0;
+   int renderedFrames = FRAME_CHECK;
 
 
    for (int i = 0; i < 4; ++i)
@@ -420,9 +428,16 @@ void nes_emulate(void)
         elapsedTime = get_elapsed_time(startTime, stopTime);
 
         // Don't allow skipping more than one frame at a time.
-        if (renderFrame && elapsedTime > frameTime) {
-            renderFrame = false;
-            ++skippedFrames;
+        if (renderFrame) {
+           ++renderedFrames;
+           if (interlace >= 0) {
+              ++interlacedFrames;
+           }
+
+           if (elapsedTime > frameTime) {
+              renderFrame = false;
+              ++skippedFrames;
+           }
         } else {
             renderFrame = true;
         }
@@ -435,18 +450,29 @@ void nes_emulate(void)
         totalElapsedTime += elapsedTime;
         ++frame;
 
+        if ((frame % FRAME_CHECK) == 0) {
+           if (renderedFrames <= INTERLACE_ON_THRESHOLD && interlace == -1) {
+              interlace = 0;
+           }
+           if (renderedFrames >= INTERLACE_OFF_THRESHOLD) {
+              interlace = -1;
+           }
+           renderedFrames = 0;
+        }
+
         if (frame == 60)
         {
           float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
           float fps = (60 - skippedFrames) / (frame / seconds) * 60.f;
 
-          printf("HEAP:0x%x, FPS:%f, SKIP:%d, BATTERY:%d [%d]\n",
-                 esp_get_free_heap_size(), fps, skippedFrames,
+          printf("HEAP:0x%x, FPS:%f, INT:%d, SKIP:%d, BATTERY:%d [%d]\n",
+                 esp_get_free_heap_size(), fps, interlacedFrames, skippedFrames,
                  battery.millivolts, battery.percentage);
 
           frame = 0;
           totalElapsedTime = 0;
           skippedFrames = 0;
+          interlacedFrames = 0;
         }
    }
 }
