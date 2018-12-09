@@ -16,7 +16,7 @@ typedef struct __attribute__((__packed__)) {
 void ili9341_init();
 void ili9341_poweroff();
 void ili9341_prepare();
-void send_reset_drawing(int left, int top, int width, int height, int cont);
+void send_reset_drawing(int left, int top, int width, int height);
 void send_continue_wait();
 void send_continue_line(uint16_t *line, int width, int lineCount);
 

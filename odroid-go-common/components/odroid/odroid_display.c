@@ -330,69 +330,54 @@ static void ili_init()
     }
 }
 
-static inline void send_reset_column(int left, int right)
+static inline void send_reset_column(int left, int right, int len)
 {
     ili_cmd(0x2A);
-    const uint8_t data1[] = { (left) >> 8, (left) & 0xff, right >> 8, right & 0xff };
-    ili_data(data1, 4);
+    const uint8_t data[] = { (left) >> 8, (left) & 0xff, right >> 8, right & 0xff };
+    ili_data(data, len);
 }
 
-static inline void send_reset_page(int top, int bottom)
+static inline void send_reset_page(int top, int bottom, int len)
 {
     ili_cmd(0x2B);
-    const uint8_t data2[] = { top >> 8, top & 0xff, bottom >> 8, bottom & 0xff };
-    ili_data(data2, 4);
+    const uint8_t data[] = { top >> 8, top & 0xff, bottom >> 8, bottom & 0xff };
+    ili_data(data, len);
 }
 
-void send_reset_drawing(int left, int top, int width, int height, int cont)
+void send_reset_drawing(int left, int top, int width, int height)
 {
     static int last_left = -1;
     static int last_right = -1;
     static int last_top = -1;
     static int last_bottom = -1;
 
-    const int right = left + width - 1;
+    const int right = (height > 1) ? left + width - 1 : SCREEN_WIDTH - 1;
     if (left != last_left || right != last_right) {
-        send_reset_column(left, right);
-    }
-
-    const int bottom = (top + height - 1);
-    if (top != last_top || bottom != last_bottom) {
-        send_reset_page(top, bottom);
-    }
-
-    if (cont) {
-        last_left = last_right = last_top = last_bottom = -1;
-        ili_cmd(0x2C);           //memory write
-    } else {
+        send_reset_column(left, right, (right != last_right) ?  4 : 2);
         last_left = left;
         last_right = right;
+    }
+
+    //const int bottom = (top + height - 1);
+    const int bottom = SCREEN_HEIGHT - 1;
+    if (top != last_top || bottom != last_bottom) {
+        send_reset_page(top, bottom, (bottom != last_bottom) ? 4 : 2);
         last_top = top;
         last_bottom = bottom;
+    }
+
+    ili_cmd(0x2C);           //memory write
+    if (height > 1) {
+        ili_cmd(0x3C);           //memory write continue
     }
 }
 
 void send_continue_line(uint16_t *line, int width, int lineCount)
 {
-    ili_cmd(0x3C);
-
     spi_transaction_t* t = spi_get_transaction();
     t->length = width * 2 * lineCount * 8;
     t->tx_buffer = line;
     t->user = (void*)0x81;
-    t->flags = 0;
-
-    spi_put_transaction(t);
-}
-
-void send_write_line(uint16_t *line, int width)
-{
-    ili_cmd(0x2C);  // Memory write
-
-    spi_transaction_t* t = spi_get_transaction();
-    t->length = width * 2 * 8;
-    t->tx_buffer = line;
-    t->user = (void*)0x81; // TODO: D/C needs to be 1, the 0x80 is to return the line buffer
     t->flags = 0;
 
     spi_put_transaction(t);
@@ -519,7 +504,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
         }
 
         // clear the screen
-        send_reset_drawing(0, 0, 320, 240, 1);
+        send_reset_drawing(0, 0, 320, 240);
 
         for (y = 0; y < 240; y += LINE_COUNT)
         {
@@ -537,7 +522,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
             const short outputWidth = 265;
             const short outputHeight = 240;
 
-            send_reset_drawing(26, 0, outputWidth, outputHeight, 1);
+            send_reset_drawing(26, 0, outputWidth, outputHeight);
 
             for (y = 0; y < GAMEBOY_HEIGHT; y += 3)
             {
@@ -616,7 +601,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
             send_reset_drawing((320 / 2) - (GAMEBOY_WIDTH / 2),
                 (240 / 2) - (GAMEBOY_HEIGHT / 2),
                 GAMEBOY_WIDTH,
-                GAMEBOY_HEIGHT, 1);
+                GAMEBOY_HEIGHT);
 
             for (y = 0; y < GAMEBOY_HEIGHT; y += LINE_COUNT)
             {
@@ -810,7 +795,7 @@ void ili9341_blank_screen()
     }
 
     // clear the screen
-    send_reset_drawing(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 1);
+    send_reset_drawing(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     for (int y = 0; y < SCREEN_HEIGHT; y += LINE_COUNT)
     {
@@ -864,10 +849,8 @@ write_rect(uint8_t *buffer, uint16_t *palette,
         iy_acc = 0;
     }
 
-    int cont = (actual_height > 1);
-
     send_reset_drawing(origin_x + actual_left, origin_y + actual_top,
-                       actual_width, actual_height, cont);
+                       actual_width, actual_height);
 
     for (int y = 0, y_acc = iy_acc, ay = 0; ay < actual_height;)
     {
@@ -904,9 +887,7 @@ write_rect(uint8_t *buffer, uint16_t *palette,
             }
         }
 
-        cont ?
-          send_continue_line(line_buffer, actual_width, lines_to_copy) :
-          send_write_line(line_buffer, actual_width);
+        send_continue_line(line_buffer, actual_width, lines_to_copy);
     }
 }
 
@@ -1047,7 +1028,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 //         memset(line[0], 0x00, 320 * sizeof(uint16_t));
 //
 //         // clear the screen
-//         send_reset_drawing(0, 0, 320, 240, 1);
+//         send_reset_drawing(0, 0, 320, 240);
 //
 //         for (y = 0; y < 240; ++y)
 //         {
@@ -1062,7 +1043,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 //         const int displayHeight = 240;
 //
 //
-//         send_reset_drawing(0, 0, displayWidth, displayHeight, 1);
+//         send_reset_drawing(0, 0, displayWidth, displayHeight);
 //
 //         for (y = 0; y < displayHeight; y += 4)
 //         {
@@ -1082,7 +1063,7 @@ void ili9341_write_frame_rectangle(short left, short top, short width, short hei
 
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
 
-    send_reset_drawing(left, top, width, height, 1);
+    send_reset_drawing(left, top, width, height);
 
     if (buffer == NULL)
     {
@@ -1093,7 +1074,7 @@ void ili9341_write_frame_rectangle(short left, short top, short width, short hei
         }
 
         // clear the screen
-        send_reset_drawing(0, 0, 320, 240, 1);
+        send_reset_drawing(0, 0, 320, 240);
 
         for (y = 0; y < 240; y += LINE_COUNT)
         {
@@ -1117,7 +1098,7 @@ void ili9341_clear(uint16_t color)
 {
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
 
-    send_reset_drawing(0, 0, 320, 240, 1);
+    send_reset_drawing(0, 0, 320, 240);
 
 
     // clear the buffer
@@ -1130,7 +1111,7 @@ void ili9341_clear(uint16_t color)
     }
 
     // clear the screen
-    send_reset_drawing(0, 0, 320, 240, 1);
+    send_reset_drawing(0, 0, 320, 240);
 
     for (int y = 0; y < 240; y += LINE_COUNT)
     {
@@ -1148,7 +1129,7 @@ void ili9341_write_frame_rectangleLE(short left, short top, short width, short h
 
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
 
-    send_reset_drawing(left, top, width, height, 1);
+    send_reset_drawing(left, top, width, height);
 
     if (buffer == NULL)
     {
@@ -1159,7 +1140,7 @@ void ili9341_write_frame_rectangleLE(short left, short top, short width, short h
         }
 
         // clear the screen
-        send_reset_drawing(0, 0, 320, 240, 1);
+        send_reset_drawing(0, 0, 320, 240);
 
         for (y = 0; y < 240; y += LINE_COUNT)
         {
