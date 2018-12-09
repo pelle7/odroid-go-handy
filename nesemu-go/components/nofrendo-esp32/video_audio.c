@@ -52,7 +52,8 @@
 
 
 #define DEFAULT_SAMPLERATE   32000
-#define  DEFAULT_FRAGSIZE     512
+//#define  DEFAULT_FRAGSIZE     512
+#define DEFAULT_FRAGSIZE     (DEFAULT_SAMPLERATE/NES_REFRESH_RATE)
 
 #define  DEFAULT_WIDTH        256
 #define  DEFAULT_HEIGHT       NES_VISIBLE_HEIGHT
@@ -91,27 +92,18 @@ static int16_t *audio_frame;
 
 void do_audio_frame() {
 #if CONFIG_SOUND_ENA
-   int remaining = DEFAULT_SAMPLERATE / NES_REFRESH_RATE;
-   while(remaining)
+   audio_callback(audio_frame, DEFAULT_FRAGSIZE); //get audio data
+
+   //16 bit mono -> 32-bit (16 bit r+l)
+   for (int i = DEFAULT_FRAGSIZE - 1; i >= 0; --i)
    {
-      int n=DEFAULT_FRAGSIZE;
-      if (n>remaining) n=remaining;
+      int sample = (int)audio_frame[i];
 
-      audio_callback(audio_frame, n); //get more data
-
-      //16 bit mono -> 32-bit (16 bit r+l)
-      for (int i=n-1; i>=0; i--)
-      {
-         int sample = (int)audio_frame[i];
-
-         audio_frame[i*2]= (short)sample;
-         audio_frame[i*2+1] = (short)sample;
-      }
-
-      odroid_audio_submit(audio_frame, n);
-
-      remaining -= n;
+      audio_frame[i*2] = (short)sample;
+      audio_frame[i*2+1] = (short)sample;
    }
+
+   odroid_audio_submit(audio_frame, DEFAULT_FRAGSIZE);
 #endif
 }
 
