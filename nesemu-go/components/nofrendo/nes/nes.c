@@ -58,9 +58,9 @@
 #define  NES_SKIP_LIMIT       (NES_REFRESH_RATE / 5)   /* 12 or 10, depending on PAL/NTSC */
 
 
-#define FRAME_CHECK 4
-#define INTERLACE_ON_THRESHOLD 2
-#define INTERLACE_OFF_THRESHOLD 4
+#define FRAME_CHECK 10
+#define INTERLACE_ON_THRESHOLD 8
+#define INTERLACE_OFF_THRESHOLD 10
 
 extern odroid_battery_state battery;
 static short interlace = -1;
