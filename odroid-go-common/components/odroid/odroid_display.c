@@ -351,15 +351,19 @@ void send_reset_drawing(int left, int top, int width, int height)
     static int last_top = -1;
     static int last_bottom = -1;
 
-    const int right = (height > 1) ? left + width - 1 : SCREEN_WIDTH - 1;
+    int right = left + width - 1;
+    if (height == 1) {
+        if (last_right > right) right = last_right;
+        else right = SCREEN_WIDTH - 1;
+    }
     if (left != last_left || right != last_right) {
         send_reset_column(left, right, (right != last_right) ?  4 : 2);
         last_left = left;
         last_right = right;
     }
 
-    //const int bottom = (top + height - 1);
-    const int bottom = SCREEN_HEIGHT - 1;
+    //int bottom = (top + height - 1);
+    int bottom = SCREEN_HEIGHT - 1;
     if (top != last_top || bottom != last_bottom) {
         send_reset_page(top, bottom, (bottom != last_bottom) ? 4 : 2);
         last_top = top;
