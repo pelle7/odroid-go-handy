@@ -1265,8 +1265,8 @@ void odroid_display_unlock()
     xSemaphoreGive(display_mutex);
 }
 
-void IRAM_ATTR
-odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
+static void IRAM_ATTR
+odroid_buffer_diff_internal(uint8_t *buffer, uint8_t *old_buffer,
                    uint16_t *palette, uint16_t *old_palette,
                    short width, short height, short stride, uint8_t pixel_mask,
                    odroid_scanline *out_diff)
@@ -1301,7 +1301,7 @@ odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
     }
 }
 
-void IRAM_ATTR
+static void IRAM_ATTR
 odroid_buffer_diff_optimize(odroid_scanline *diff, short height)
 {
     // Run through and count how many lines each particular run has
@@ -1324,6 +1324,52 @@ odroid_buffer_diff_optimize(odroid_scanline *diff, short height)
         diff[y-1].width = (right > right_prev) ?
           right - diff[y-1].left : right_prev - diff[y-1].left;
         diff[y-1].repeat = diff[y].repeat + 1;
+    }
+}
+
+void IRAM_ATTR
+odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
+                   uint16_t *palette, uint16_t *old_palette,
+                   short width, short height, short stride, uint8_t pixel_mask,
+                   odroid_scanline *out_diff)
+{
+    odroid_buffer_diff_internal(buffer, old_buffer, palette, old_palette,
+                                width, height, stride, pixel_mask, out_diff);
+    odroid_buffer_diff_optimize(out_diff, height);
+}
+
+void IRAM_ATTR
+odroid_buffer_diff_interlaced(uint8_t *buffer, uint8_t *old_buffer,
+                              uint16_t *palette, uint16_t *old_palette,
+                              short width, short height, short stride,
+                              uint8_t pixel_mask, int field,
+                              odroid_scanline *out_diff,
+                              odroid_scanline *old_diff)
+{
+    if (old_buffer) {
+        // Copy the lines we aren't going to draw from the old buffer so we can
+        // still keep track of changes.
+        for (short y = 0; y < height/2; ++y) {
+            int actual_y = (y * 2) + (1 - field);
+            /*printf("Copying old scanline %d (%d, %d)\n", actual_y,
+              old_diff[actual_y].left, old_diff[actual_y].width);*/
+            if (!old_diff[actual_y].width) continue;
+            int idx = (actual_y * stride) + old_diff[actual_y].left;
+            memcpy(&buffer[idx], &old_buffer[idx], old_diff[actual_y].width);
+        }
+    }
+
+    odroid_buffer_diff_internal(buffer + (field * stride),
+                                old_buffer ? old_buffer + (field * stride) : NULL,
+                                palette, old_palette,
+                                width, height / 2,
+                                stride * 2, pixel_mask, out_diff);
+
+    for (short y = height - 1; y >= 0; --y) {
+        out_diff[y] = out_diff[y/2];
+        if ((y % 2) ^ field) {
+            out_diff[y].width = 0;
+        }
     }
 }
 

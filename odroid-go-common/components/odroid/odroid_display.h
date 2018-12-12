@@ -38,10 +38,21 @@ void odroid_display_lock();
 void odroid_display_unlock();
 void odroid_display_show_sderr(int errNum);
 void odroid_display_show_hourglass();
-void odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
-                        uint16_t *palette, uint16_t *old_palette,
+void odroid_buffer_diff(uint8_t *buffer,
+                        uint8_t *old_buffer,
+                        uint16_t *palette,
+                        uint16_t *old_palette,
                         short width, short height, short stride,
                         uint8_t pixel_mask,
                         odroid_scanline *out_diff);
-void odroid_buffer_diff_optimize(odroid_scanline *diff, short height);
+void odroid_buffer_diff_interlaced(uint8_t *buffer,
+                                   uint8_t *old_buffer,
+                                   uint16_t *palette,
+                                   uint16_t *old_palette,
+                                   short width, short height, short stride,
+                                   uint8_t pixel_mask,
+                                   int field,
+                                   odroid_scanline *out_diff,
+                                   odroid_scanline *old_diff);
+
 int odroid_buffer_diff_count(odroid_scanline *diff, short height);

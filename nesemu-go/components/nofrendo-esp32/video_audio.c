@@ -235,7 +235,6 @@ static void free_write(int num_dirties, rect_t *dirty_rects)
    bmp_destroy(&myBitmap);
 }
 
-static uint8_t *old_buffer = NULL;
 static struct update_meta update1 = {0,};
 static struct update_meta update2 = {0,};
 static struct update_meta *update = &update2;
@@ -248,52 +247,28 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, short interlace) {
       abort();
    }
 
-   uint8_t *new_buffer = bmp->line[NES_VERTICAL_OVERDRAW/2];
-#if 1
-   if (old_buffer && interlace >= 0) {
-      // Copy the lines we aren't going to draw from the old buffer so we can
-      // still keep track of changes.
-      for (short y = 0; y < NES_VISIBLE_HEIGHT/2; ++y) {
-         int actual_y = (y * 2) + (1 - interlace);
-         /*printf("Copying old scanline %d (%d, %d)\n", actual_y,
-                update->diff[actual_y].left, update->diff[actual_y].width);*/
-         if (!update->diff[actual_y].width) continue;
-         int idx = (actual_y * update->stride) + update->diff[actual_y].left;
-         memcpy(&new_buffer[idx], &old_buffer[idx], update->diff[actual_y].width);
-      }
-   }
-#endif
+   uint8_t *old_buffer = update->buffer;
+   odroid_scanline *old_diff = update->diff;
 
    // Flip the update struct so we can keep track of the changes in the last
-   // frame.
+   // frame and fill in the new details (actually, these ought to always be
+   // the same...)
    update = (update == &update1) ? &update2 : &update1;
-
-   // Fill in the update struct
-   update->buffer = new_buffer;
+   update->buffer = bmp->line[NES_VERTICAL_OVERDRAW/2];
    update->stride = bmp->pitch;
 
-   //printf("Diffing...\n");
    if (interlace >= 0) {
-      odroid_buffer_diff(update->buffer + (interlace * update->stride),
-                         old_buffer ? old_buffer + (interlace * update->stride) : NULL,
-                         myPalette, myPalette,
-                         NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT / 2,
-                         update->stride * 2, PIXEL_MASK, update->diff);
-      for (short y = NES_VISIBLE_HEIGHT - 1; y >= 0; --y) {
-         update->diff[y] = update->diff[y/2];
-         if ((y % 2) ^ interlace) {
-            update->diff[y].width = 0;
-         }
-      }
+      odroid_buffer_diff_interlaced(update->buffer, old_buffer,
+                                    myPalette, myPalette,
+                                    NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
+                                    update->stride, PIXEL_MASK, interlace,
+                                    update->diff, old_diff);
    } else {
       odroid_buffer_diff(update->buffer, old_buffer,
                          myPalette, myPalette,
                          NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
                          update->stride, PIXEL_MASK, update->diff);
-      odroid_buffer_diff_optimize(update->diff, NES_VISIBLE_HEIGHT);
    }
-
-   old_buffer = update->buffer;
 
    if (xTaskNotifyWait(0, ULONG_MAX, NULL, portMAX_DELAY) != pdPASS)
    {
