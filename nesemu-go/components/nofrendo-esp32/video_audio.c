@@ -619,7 +619,7 @@ int osd_init()
 
    mainTask = xTaskGetCurrentTaskHandle();
    xTaskCreatePinnedToCore(&ioTaskCallback, "ioTask", 2048, NULL, 5, &ioTask, 1);
-   if (xTaskNotify(ioTask, 1, eSetValueWithoutOverwrite) != pdPASS) {
+   if (xTaskNotify(mainTask, 1, eSetValueWithoutOverwrite) != pdPASS) {
       printf("Failed to notify IO task during initialisation\n");
       abort();
    }
