@@ -144,6 +144,10 @@ DRAM_ATTR static const ili_init_cmd_t ili_init_cmds[] = {
 static inline uint16_t* line_buffer_get()
 {
     uint16_t* buffer;
+    if (use_polling) {
+        return line[0];
+    }
+
     if (xQueueReceive(line_buffer_queue, &buffer, 1000 / portTICK_RATE_MS) != pdTRUE)
     {
         abort();
@@ -242,9 +246,6 @@ static inline void spi_put_transaction(spi_transaction_t* t)
 
     if (use_polling) {
         spi_device_polling_transmit(spi, t);
-        if ((int)t->user & 0x80) {
-            line_buffer_put(t->tx_buffer);
-        }
     } else {
         esp_err_t ret = spi_device_queue_trans(spi, t, portMAX_DELAY);
         assert(ret==ESP_OK);
