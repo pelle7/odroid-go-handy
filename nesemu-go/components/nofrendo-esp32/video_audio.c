@@ -67,7 +67,6 @@ struct update_meta {
 };
 
 odroid_volume_level Volume;
-odroid_battery_state battery;
 int scaling_enabled = 1;
 int previous_scaling_enabled = 1;
 TaskHandle_t ioTask;
@@ -327,8 +326,6 @@ static void ioTaskCallback(void *arg) {
                                  update->stride, PIXEL_MASK,
                                  myPalette, scaling_enabled);
 
-        odroid_input_battery_level_read(&battery);
-
         if (xTaskNotify(mainTask, 1, eSetValueWithoutOverwrite) != pdPASS)
         {
            printf("Failed to notify main task\n");
@@ -339,7 +336,6 @@ static void ioTaskCallback(void *arg) {
     odroid_display_lock();
     odroid_display_show_hourglass();
     odroid_display_unlock();
-    //odroid_display_drain_spi();
 
     ioTaskIsRunning = false;
 
