@@ -215,7 +215,7 @@ static void spi_initialize()
 
 
 
-static spi_transaction_t* spi_get_transaction()
+static inline spi_transaction_t* spi_get_transaction()
 {
     spi_transaction_t* t;
 
@@ -230,7 +230,7 @@ static spi_transaction_t* spi_get_transaction()
     return t;
 }
 
-static void spi_put_transaction(spi_transaction_t* t)
+static inline void spi_put_transaction(spi_transaction_t* t)
 {
     t->rx_buffer = NULL;
     t->rxlength = t->length;
