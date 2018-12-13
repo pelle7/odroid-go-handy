@@ -947,7 +947,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
     }
 #endif
 
-    bool need_polling_updates = false;
+    bool need_interrupt_updates = false;
     int left = 0;
     int line_width = width;
     int repeat = 0;
@@ -960,6 +960,8 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
     poll_threshold = INT_MAX;
 #endif
 
+    // Do polling updates first
+    use_polling = true;
     for (int y = 0, i = 0; y < height; ++y, i += stride, --repeat)
     {
         if (repeat > 0) continue;
@@ -974,22 +976,19 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 
         if (line_width > 0) {
             int n_pixels = line_width * repeat;
-            if (n_pixels >= poll_threshold) {
+            if (n_pixels < poll_threshold) {
                 write_rect(buffer, palette, origin_x, origin_y,
                            left, y, line_width, repeat, i + left, stride,
                            pixel_mask, x_inc, y_inc);
             } else {
-                need_polling_updates = true;
+                need_interrupt_updates = true;
             }
         }
     }
+    use_polling = false;
 
-    // Use polling updates for smaller areas
-    if (need_polling_updates) {
-        // Drain SPI queue before switching to polling mode
-        odroid_display_drain_spi();
-        use_polling = true;
-
+    // Use interrupt updates for larger areas
+    if (need_interrupt_updates) {
         repeat = 0;
         for (int y = 0, i = 0; y < height; ++y, i += stride, --repeat)
         {
@@ -1003,17 +1002,15 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
                 repeat = height;
             }
 
-
             if (line_width) {
                 int n_pixels = line_width * repeat;
-                if (n_pixels < poll_threshold) {
+                if (n_pixels >= poll_threshold) {
                     write_rect(buffer, palette, origin_x, origin_y,
                                left, y, line_width, repeat, i + left, stride,
                                pixel_mask, x_inc, y_inc);
                 }
             }
         }
-        use_polling = false;
     }
 
     spi_device_release_bus(spi);
