@@ -318,13 +318,19 @@ static void ioTaskCallback(void *arg) {
            // Clear display
            ili9341_blank_screen();
            previous_scaling_enabled = scaling_enabled;
+           if (scaling_enabled) {
+               odroid_display_set_scale(NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
+                                        (8.f/7.f));
+           } else {
+               odroid_display_reset_scale(NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT);
+           }
         }
 
         ili9341_write_frame_8bit(update->buffer,
                                  scale_changed ? NULL : update->diff,
                                  NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
                                  update->stride, PIXEL_MASK,
-                                 myPalette, scaling_enabled);
+                                 myPalette);
 
         if (xTaskNotify(mainTask, 1, eSetValueWithoutOverwrite) != pdPASS)
         {
@@ -581,6 +587,7 @@ int osd_init()
    Volume = odroid_settings_Volume_get();
 
    scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_NES) ? false : true;
+   previous_scaling_enabled = !scaling_enabled;
 
    previousJoystickState = odroid_input_read_raw();
    ignoreMenuButton = previousJoystickState.values[ODROID_INPUT_MENU];

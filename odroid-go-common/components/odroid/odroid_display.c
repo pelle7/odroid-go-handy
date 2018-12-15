@@ -41,6 +41,7 @@ static spi_device_handle_t spi;
 
 #define LINE_BUFFERS (2)
 #define LINE_COUNT (5)
+#define LINE_BUFFER_SIZE (SCREEN_WIDTH*LINE_COUNT)
 uint16_t* line[LINE_BUFFERS];
 QueueHandle_t spi_queue;
 QueueHandle_t line_buffer_queue;
@@ -820,74 +821,74 @@ write_rect(uint8_t *buffer, uint16_t *palette,
 {
     int actual_left, actual_width, actual_top, actual_height, ix_acc, iy_acc;
 
-    // TODO: Better verify these calculations are correct. They are correct
-    //       when width = 256, but that's sometimes a convenient divider.
-    if (x_inc != SCREEN_WIDTH) {
-        int right = left + width;
-        actual_left = ((SCREEN_WIDTH * left) + (x_inc - 1)) / x_inc;
-        actual_width = ((SCREEN_WIDTH * right) + x_inc) / x_inc - actual_left;
+    // TODO: These can be replaced by equations, but I keep getting them
+    //       slightly wrong, so until then...
+    actual_left = actual_width = ix_acc = 0;
+    for (int x = 0, x_acc = 0, ax = 0; x < left + width; ++ax) {
+        x_acc += x_inc;
+        while (x_acc >= SCREEN_WIDTH) {
+            x_acc -= SCREEN_WIDTH;
+            ++x;
 
-        if (origin_x + actual_left + actual_width > SCREEN_WIDTH)
-            actual_width = SCREEN_WIDTH - actual_left - origin_x;
-
-        ix_acc = actual_left * x_inc;
-        ix_acc -= (ix_acc / SCREEN_WIDTH) * SCREEN_WIDTH;
-    } else {
-        actual_left = left;
-        actual_width = width;
-        ix_acc = 0;
+            if (x == left) {
+                ix_acc = x_acc;
+                actual_left = ax + 1;
+            }
+            if (x == left + width) {
+                actual_width = (ax - actual_left) + 1;
+            }
+        }
     }
 
-    if (y_inc != SCREEN_HEIGHT) {
-        int bottom = top + height;
-        actual_top = ((SCREEN_HEIGHT * top) + (y_inc - 1)) / y_inc;
-        actual_height = ((SCREEN_HEIGHT * bottom) + y_inc) / y_inc - actual_top;
+    actual_top = actual_height = iy_acc = 0;
+    for (int y = 0, y_acc = 0, ay = 0; y < top + height; ++ay) {
+        y_acc += y_inc;
+        while (y_acc >= SCREEN_HEIGHT) {
+            y_acc -= SCREEN_HEIGHT;
+            ++y;
 
-        if (origin_y + actual_top + actual_height > SCREEN_HEIGHT)
-            actual_height = SCREEN_HEIGHT - actual_top - origin_y;
+            if (y == top) {
+                iy_acc = y_acc;
+                actual_top = ay + 1;
+            }
+            if (y == top + height) {
+                actual_height = (ay - actual_top) + 1;
+            }
+        }
+    }
 
-        iy_acc = actual_top * y_inc;
-        iy_acc -= (iy_acc / SCREEN_HEIGHT) * SCREEN_HEIGHT;
-    } else {
-        actual_top = top;
-        actual_height = height;
-        iy_acc = 0;
+    if (actual_width == 0 || actual_height == 0) {
+        return;
     }
 
     send_reset_drawing(origin_x + actual_left, origin_y + actual_top,
                        actual_width, actual_height);
 
-    for (int y = 0, y_acc = iy_acc, ay = 0; ay < actual_height;)
+    int line_count = LINE_BUFFER_SIZE / actual_width;
+    for (int y = 0, y_acc = iy_acc; y < height;)
     {
         int line_buffer_index = 0;
         uint16_t* line_buffer = line_buffer_get();
 
         int lines_to_copy = 0;
-        int line_count = (SCREEN_WIDTH * LINE_COUNT) / actual_width;
-        for (; (lines_to_copy < line_count) &&
-             (ay < actual_height); ++lines_to_copy, ++ay)
+        for (; (lines_to_copy < line_count) && (y < height); ++lines_to_copy)
         {
-            for (int x = 0, x_acc = ix_acc, ax = 0; ax < actual_width; ++ax)
+            for (int x = 0, x_acc = ix_acc; x < width;)
             {
-                line_buffer[line_buffer_index + ax] =
+                line_buffer[line_buffer_index++] =
                   palette[buffer[bufferIndex + x] & pixel_mask];
 
                 x_acc += x_inc;
-                if (x_acc >= SCREEN_WIDTH) {
-                    if (x < width - 1) {
-                        ++x;
-                    }
+                while (x_acc >= SCREEN_WIDTH) {
+                    ++x;
                     x_acc -= SCREEN_WIDTH;
                 }
             }
-            line_buffer_index += actual_width;
 
             y_acc += y_inc;
-            if (y_acc >= SCREEN_HEIGHT) {
-                if (y < height - 1) {
-                    ++y;
-                    bufferIndex += stride;
-                }
+            while (y_acc >= SCREEN_HEIGHT) {
+                ++y;
+                bufferIndex += stride;
                 y_acc -= SCREEN_HEIGHT;
             }
         }
@@ -896,11 +897,50 @@ write_rect(uint8_t *buffer, uint16_t *palette,
     }
 }
 
+static int x_inc = SCREEN_WIDTH;
+static int y_inc = SCREEN_HEIGHT;
+static int x_origin = 0;
+static int y_origin = 0;
+static float x_scale = 1.f;
+static float y_scale = 1.f;
+
+void
+odroid_display_reset_scale(short width, short height)
+{
+    x_inc = SCREEN_WIDTH;
+    y_inc = SCREEN_HEIGHT;
+    x_origin = (SCREEN_WIDTH - width) / 2;
+    y_origin = (SCREEN_HEIGHT - height) / 2;
+    x_scale = y_scale = 1.f;
+}
+
+void
+odroid_display_set_scale(short width, short height, float aspect)
+{
+    float buffer_aspect = ((width * aspect) / (float)height);
+    float screen_aspect = SCREEN_WIDTH / (float)SCREEN_HEIGHT;
+
+    if (buffer_aspect < screen_aspect) {
+        y_scale = SCREEN_HEIGHT / (float)height;
+        x_scale = y_scale * aspect;
+    } else {
+        x_scale = SCREEN_WIDTH / (float)width;
+        y_scale = x_scale / aspect;
+    }
+
+    x_inc = SCREEN_WIDTH / x_scale;
+    y_inc = SCREEN_HEIGHT / y_scale;
+    x_origin = (SCREEN_WIDTH - (width * x_scale)) / 2.f;
+    y_origin = (SCREEN_HEIGHT - (height * y_scale)) / 2.f;
+
+    printf("%dx%d@%.3f x_inc:%d y_inc:%d x_scale:%.3f y_scale:%.3f x_origin:%d y_origin:%d\n",
+           width, height, aspect, x_inc, y_inc, x_scale, y_scale, x_origin, y_origin);
+}
+
 void
 ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
                          short width, short height, short stride,
-                         uint8_t pixel_mask, uint16_t* palette,
-                         uint8_t do_scale)
+                         uint8_t pixel_mask, uint16_t* palette)
 {
     if (!buffer) {
         ili9341_blank_screen();
@@ -910,33 +950,6 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
     odroid_display_lock();
 
     spi_device_acquire_bus(spi, portMAX_DELAY);
-
-    float scale;
-    int origin_x, origin_y, x_inc, y_inc, poll_threshold;
-    if (do_scale) {
-        float buffer_aspect = width / (float)height;
-        float screen_aspect = SCREEN_WIDTH / (float)SCREEN_HEIGHT;
-
-        if (buffer_aspect < screen_aspect) {
-            scale = SCREEN_HEIGHT / (float)height;
-            origin_x = (SCREEN_WIDTH - (width * scale)) / 2;
-            origin_y = 0;
-        } else {
-            scale = SCREEN_WIDTH / (float)width;
-            origin_x = 0;
-            origin_y = (SCREEN_HEIGHT - (height * scale)) / 2;
-        }
-        x_inc = SCREEN_WIDTH / scale;
-        y_inc = SCREEN_HEIGHT / scale;
-        poll_threshold = POLLING_PIXEL_THRESHOLD / scale;
-    } else {
-        scale = 1.f;
-        x_inc = SCREEN_WIDTH;
-        y_inc = SCREEN_HEIGHT;
-        origin_x = (SCREEN_WIDTH - width) / 2;
-        origin_y = (SCREEN_HEIGHT - height) / 2;
-        poll_threshold = POLLING_PIXEL_THRESHOLD;
-    }
 
 #if 0
     if (diff) {
@@ -975,9 +988,9 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
         }
 
         if (line_width > 0) {
-            int n_pixels = line_width * repeat;
-            if (n_pixels < poll_threshold) {
-                write_rect(buffer, palette, origin_x, origin_y,
+            int n_pixels = (line_width * x_scale) * (repeat * y_scale);
+            if (n_pixels < POLLING_PIXEL_THRESHOLD) {
+                write_rect(buffer, palette, x_origin, y_origin,
                            left, y, line_width, repeat, i + left, stride,
                            pixel_mask, x_inc, y_inc);
             } else {
@@ -1003,9 +1016,9 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
             }
 
             if (line_width) {
-                int n_pixels = line_width * repeat;
-                if (n_pixels >= poll_threshold) {
-                    write_rect(buffer, palette, origin_x, origin_y,
+                int n_pixels = (line_width * x_scale) * (repeat * y_scale);
+                if (n_pixels >= POLLING_PIXEL_THRESHOLD) {
+                    write_rect(buffer, palette, x_origin, y_origin,
                                left, y, line_width, repeat, i + left, stride,
                                pixel_mask, x_inc, y_inc);
                 }
