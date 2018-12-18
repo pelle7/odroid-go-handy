@@ -59,7 +59,7 @@
 
 
 #define FRAME_CHECK 10
-#if 0
+#if 1
 #define INTERLACE_ON_THRESHOLD 8
 #define INTERLACE_OFF_THRESHOLD 10
 #elif 0

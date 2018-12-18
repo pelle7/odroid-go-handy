@@ -821,8 +821,18 @@ write_rect(uint8_t *buffer, uint16_t *palette,
 {
     int actual_left, actual_width, actual_top, actual_height, ix_acc, iy_acc;
 
-    // TODO: These can be replaced by equations, but I keep getting them
-    //       slightly wrong, so until then...
+#if 1
+    actual_left = ((SCREEN_WIDTH * left) + (x_inc - 1)) / x_inc;
+    actual_top = ((SCREEN_HEIGHT * top) + (y_inc - 1)) / y_inc;
+    int actual_right = ((SCREEN_WIDTH * (left + width)) + (x_inc - 1)) / x_inc;
+    int actual_bottom = ((SCREEN_HEIGHT * (top + height)) + (y_inc - 1)) / y_inc;
+    actual_width = actual_right - actual_left;
+    actual_height = actual_bottom - actual_top;
+    ix_acc = (x_inc * actual_left) % SCREEN_WIDTH;
+    iy_acc = (y_inc * actual_top) % SCREEN_HEIGHT;
+#else
+    // Leaving these here for reference, the above equations should produce
+    // equivalent results.
     actual_left = actual_width = ix_acc = 0;
     for (int x = 0, x_acc = 0, ax = 0; x < left + width; ++ax) {
         x_acc += x_inc;
@@ -856,6 +866,7 @@ write_rect(uint8_t *buffer, uint16_t *palette,
             }
         }
     }
+#endif
 
     if (actual_width == 0 || actual_height == 0) {
         return;
@@ -1272,6 +1283,10 @@ void odroid_display_unlock()
 {
     if (!display_mutex) abort();
 
+#define INTERLACE_ON_THRESHOLD (FRAME_CHECK+1)
+#define INTERLACE_OFF_THRESHOLD (FRAME_CHECK+1)
+#define INTERLACE_ON_THRESHOLD (FRAME_CHECK+1)
+#define INTERLACE_OFF_THRESHOLD (FRAME_CHECK+1)
     odroid_display_drain_spi();
     xSemaphoreGive(display_mutex);
 }
