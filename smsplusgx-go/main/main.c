@@ -26,7 +26,7 @@ const char* SD_BASE_PATH = "/sd";
 #define AUDIO_SAMPLE_RATE (32000)
 
 #define FRAME_CHECK 10
-#if 1
+#if 0
 #define INTERLACE_ON_THRESHOLD 8
 #define INTERLACE_OFF_THRESHOLD 10
 #elif 0

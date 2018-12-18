@@ -59,8 +59,18 @@
 
 
 #define FRAME_CHECK 10
+#if 0
 #define INTERLACE_ON_THRESHOLD 8
 #define INTERLACE_OFF_THRESHOLD 10
+#elif 0
+// All interlaced updates
+#define INTERLACE_ON_THRESHOLD (FRAME_CHECK+1)
+#define INTERLACE_OFF_THRESHOLD (FRAME_CHECK+1)
+#else
+// All progressive updates
+#define INTERLACE_ON_THRESHOLD 0
+#define INTERLACE_OFF_THRESHOLD 0
+#endif
 
 odroid_battery_state battery;
 static short interlace = -1;
