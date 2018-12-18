@@ -22,6 +22,7 @@ typedef signed long int int32;
 #include <math.h>
 #include <limits.h>
 //#include <zlib.h>
+#include <esp_attr.h>
 
 #define ESP32_PSRAM (0x3f800000)
 

@@ -25,6 +25,20 @@ const char* SD_BASE_PATH = "/sd";
 
 #define AUDIO_SAMPLE_RATE (32000)
 
+#define FRAME_CHECK 10
+#if 1
+#define INTERLACE_ON_THRESHOLD 8
+#define INTERLACE_OFF_THRESHOLD 10
+#elif 0
+// All interlaced updates
+#define INTERLACE_ON_THRESHOLD (FRAME_CHECK+1)
+#define INTERLACE_OFF_THRESHOLD (FRAME_CHECK+1)
+#else
+// All progressive updates
+#define INTERLACE_ON_THRESHOLD 0
+#define INTERLACE_OFF_THRESHOLD 0
+#endif
+
 #define SMS_WIDTH 256
 #define SMS_HEIGHT 192
 
@@ -32,8 +46,8 @@ const char* SD_BASE_PATH = "/sd";
 #define GG_HEIGHT 144
 
 #define PIXEL_MASK 0x1F
+#define PAL_SHIFT_MASK 0x80
 
-uint16 palette[PALETTE_SIZE];
 uint8_t* framebuffer[2];
 int currentFramebuffer = 0;
 
@@ -51,6 +65,7 @@ odroid_battery_state battery;
 struct bitmap_meta {
     odroid_scanline diff[SMS_HEIGHT];
     uint8_t *buffer;
+    uint16 palette[PALETTE_SIZE*2];
     int width;
     int height;
     int stride;
@@ -80,14 +95,17 @@ void videoTask(void *arg)
         {
             ili9341_blank_screen();
             previous_scaling_enabled = scaling_enabled;
+            if (scaling_enabled) {
+                odroid_display_set_scale(meta->width, meta->height, 1.f);
+            } else {
+                odroid_display_reset_scale(meta->width, meta->height);
+            }
         }
 
-        render_copy_palette(palette);
         ili9341_write_frame_8bit(meta->buffer,
                                  scale_changed ? NULL : meta->diff,
                                  meta->width, meta->height,
-                                 meta->stride, PIXEL_MASK, palette,
-                                 scaling_enabled);
+                                 meta->stride, PIXEL_MASK, meta->palette);
 
         odroid_input_battery_level_read(&battery);
 
@@ -561,8 +579,6 @@ void app_main(void)
 
 
 
-    ili9341_blank_screen();
-
     odroid_audio_init(odroid_settings_AudioSink_get(), AUDIO_SAMPLE_RATE);
 
 
@@ -630,10 +646,15 @@ void app_main(void)
     bool ignoreMenuButton = previousState.values[ODROID_INPUT_MENU];
 
     scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_SMS) ? false : true;
+    previous_scaling_enabled = !scaling_enabled;
 
-    int refresh = (sms.display == DISPLAY_NTSC) ? FPS_NTSC : FPS_PAL;
+    int refresh = (sms.display == DISPLAY_NTSC) ? 60 : 50;
     const int frameTime = CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000 / refresh;
     int skipFrame = 0;
+    int skippedFrames = 0;
+    int renderedFrames = 0;
+    int interlacedFrames = 0;
+    int interlace = -1;
 
     while (true)
     {
@@ -776,31 +797,41 @@ void app_main(void)
 
         if (!skipFrame)
         {
-            system_frame(0);
+            system_frame(0, interlace);
 
             // Store buffer data
             if (sms.console == CONSOLE_GG || sms.console == CONSOLE_GGMS) {
                 update->buffer = bitmap.data + (SMS_WIDTH - GG_WIDTH) / 2;
                 update->width = GG_WIDTH;
                 update->height = GG_HEIGHT;
-                update->stride = SMS_WIDTH;
             } else {
                 update->buffer = bitmap.data;
                 update->width = SMS_WIDTH;
                 update->height = SMS_HEIGHT;
-                update->stride = SMS_WIDTH;
             }
+            update->stride = bitmap.pitch;
+            render_copy_palette(update->palette);
 
-            // Swap buffers
-            currentFramebuffer = currentFramebuffer ? 0 : 1;
-            bitmap.data = framebuffer[currentFramebuffer];
+            struct bitmap_meta *old_update = (update == &update1) ? &update2 : &update1;
 
             // Diff buffer
-            odroid_buffer_diff(update->buffer, bitmap.data,
-                               render_peek_palette(), palette,
-                               update->width, update->height,
-                               update->stride, PIXEL_MASK, update->diff);
-            odroid_buffer_diff_optimize(update->diff, update->height);
+            if (interlace >= 0) {
+                ++interlacedFrames;
+                interlace = 1 - interlace;
+                odroid_buffer_diff_interlaced(update->buffer, old_update->buffer,
+                                              update->palette, old_update->palette,
+                                              update->width, update->height,
+                                              update->stride,
+                                              PIXEL_MASK, PAL_SHIFT_MASK,
+                                              interlace,
+                                              update->diff, old_update->diff);
+            } else {
+                odroid_buffer_diff(update->buffer, old_update->buffer,
+                                   update->palette, old_update->palette,
+                                   update->width, update->height,
+                                   update->stride, PIXEL_MASK, PAL_SHIFT_MASK,
+                                   update->diff);
+            }
 
             // Send update data to video queue on other core
             void *arg = (void*)update;
@@ -808,11 +839,17 @@ void app_main(void)
 
             // Flip the update struct so we don't start writing into it while
             // the second core is still updating the screen.
-            update = (update == &update1) ? &update2 : &update1;
+            update = old_update;
+
+            // Swap buffers
+            currentFramebuffer = 1 - currentFramebuffer;
+            bitmap.data = framebuffer[currentFramebuffer];
+            ++renderedFrames;
         }
         else
         {
-            system_frame(1);
+            system_frame(1, -1);
+            ++skippedFrames;
         }
 
         // See if we need to skip a frame to keep up
@@ -821,6 +858,17 @@ void app_main(void)
             (stopTime - startTime) :
             ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
         skipFrame = (!skipFrame && elapsedTime > frameTime);
+
+        // Use interlacing if we drop too many frames
+        if ((frame % FRAME_CHECK) == 0) {
+            if (renderedFrames <= INTERLACE_ON_THRESHOLD && interlace == -1) {
+                interlace = 0;
+            }
+            if (renderedFrames >= INTERLACE_OFF_THRESHOLD) {
+                interlace = -1;
+            }
+            renderedFrames = 0;
+        }
 
         // Create a buffer for audio if needed
         if (!audioBuffer || audioBufferCount < snd.sample_count)
@@ -876,18 +924,18 @@ void app_main(void)
         totalElapsedTime += elapsedTime;
         ++frame;
 
-#if 0
         if (frame == 60)
         {
           float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
-          float fps = frame / seconds;
+          float fps = (60 - skippedFrames) / (frame / seconds) * 60.f;
 
 
-          printf("HEAP:0x%x, FPS:%f, BATTERY:%d [%d]\n", esp_get_free_heap_size(), fps, battery.millivolts, battery.percentage);
+          printf("HEAP:0x%x, FPS:%f, INT:%d, SKIP:%d, BATTERY:%d [%d]\n", esp_get_free_heap_size(), fps, interlacedFrames, skippedFrames, battery.millivolts, battery.percentage);
 
           frame = 0;
           totalElapsedTime = 0;
+          skippedFrames = 0;
+          interlacedFrames = 0;
         }
-#endif
     }
 }

@@ -29,9 +29,12 @@ cart_t cart;
 input_t input;
 
 /* Run the virtual console emulation for one frame */
-void system_frame(int skip_render)
+void system_frame(int skip_render, int interlace)
 {
   int iline, line_z80 = 0;
+
+  /* Set whether this frame will have interlaced rendering or not */
+  render_mode(skip_render, interlace);
 
   /* Debounce pause key */
   if(input.system & INPUT_PAUSE)

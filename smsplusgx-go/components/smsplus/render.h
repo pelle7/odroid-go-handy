@@ -43,11 +43,11 @@ extern uint8 gg_cram_expand_table[16];
 extern void render_shutdown(void);
 extern void render_init(void);
 extern void render_reset(void);
+extern void render_mode(int skip_render, int interlace);
 extern void render_line(int line);
 extern void render_bg_sms(int line);
 extern void render_obj_sms(int line);
 extern void palette_sync(int index);
-extern uint16* render_peek_palette();
 extern void render_copy_palette(uint16* palette);
 
 #endif /* _RENDER_H_ */

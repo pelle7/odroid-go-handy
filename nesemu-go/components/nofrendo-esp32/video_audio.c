@@ -256,17 +256,20 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, short interlace) {
    update->buffer = bmp->line[NES_VERTICAL_OVERDRAW/2];
    update->stride = bmp->pitch;
 
+   // Note, the NES palette never changes during runtime and we assume that
+   // there are no duplicate entries, so no need to pass the palette over to
+   // the diff function.
    if (interlace >= 0) {
       odroid_buffer_diff_interlaced(update->buffer, old_buffer,
-                                    myPalette, myPalette,
+                                    NULL, NULL,
                                     NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
-                                    update->stride, PIXEL_MASK, interlace,
+                                    update->stride, PIXEL_MASK, 0, interlace,
                                     update->diff, old_diff);
    } else {
       odroid_buffer_diff(update->buffer, old_buffer,
-                         myPalette, myPalette,
+                         NULL, NULL,
                          NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
-                         update->stride, PIXEL_MASK, update->diff);
+                         update->stride, PIXEL_MASK, 0, update->diff);
    }
 
    if (xTaskNotifyWait(0, ULONG_MAX, NULL, portMAX_DELAY) != pdPASS)
