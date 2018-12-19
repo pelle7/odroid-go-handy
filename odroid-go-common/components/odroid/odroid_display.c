@@ -1283,10 +1283,6 @@ void odroid_display_unlock()
 {
     if (!display_mutex) abort();
 
-#define INTERLACE_ON_THRESHOLD (FRAME_CHECK+1)
-#define INTERLACE_OFF_THRESHOLD (FRAME_CHECK+1)
-#define INTERLACE_ON_THRESHOLD (FRAME_CHECK+1)
-#define INTERLACE_OFF_THRESHOLD (FRAME_CHECK+1)
     odroid_display_drain_spi();
     xSemaphoreGive(display_mutex);
 }
@@ -1321,33 +1317,56 @@ odroid_buffer_diff_internal(uint8_t *buffer, uint8_t *old_buffer,
         for (int y = 0; y < height; ++y) {
             out_diff[y].left = 0;
             out_diff[y].width = width;
-            out_diff[y].repeat = height - y;
+            out_diff[y].repeat = 1;
         }
     } else {
         int i = 0;
+        uint32_t pixel_mask32 = (pixel_mask << 24) | (pixel_mask << 16) |
+                                (pixel_mask <<8) | pixel_mask;
         for (int y = 0; y < height; ++y, i += stride) {
             out_diff[y].left = width;
             out_diff[y].width = 0;
             out_diff[y].repeat = 1;
 
-            for (int x = 0, idx = i; x < width; ++x, ++idx) {
-                if (!pixel_diff(buffer, old_buffer, palette, old_palette,
-                                pixel_mask, palette_shift_mask, idx)) {
-                    continue;
+            if (!palette) {
+                // This is only accurate to 4 pixels of course, but much faster
+                uint32_t *buffer32 = &buffer[i];
+                uint32_t *old_buffer32 = &old_buffer[i];
+                for (int x = 0; x < width>>2; ++x) {
+                    if ((buffer32[x] & pixel_mask32) !=
+                        (old_buffer32[x] & pixel_mask32))
+                    {
+                        out_diff[y].left = x << 2;
+                        for (x = (width-1)>>2; x >= 0; --x) {
+                            if ((buffer32[x] & pixel_mask32) !=
+                                (old_buffer32[x] & pixel_mask32)) {
+                                out_diff[y].width = (((x + 1)<<2) - out_diff[y].left);
+                                break;
+                            }
+                        }
+                        break;
+                    }
                 }
-                out_diff[y].left = x;
-
-                for (x = width - 1, idx = i + (width - 1);
-                     x >= 0; --x, --idx)
-                {
+            } else {
+                for (int x = 0, idx = i; x < width; ++x, ++idx) {
                     if (!pixel_diff(buffer, old_buffer, palette, old_palette,
                                     pixel_mask, palette_shift_mask, idx)) {
                         continue;
                     }
-                    out_diff[y].width = (x - out_diff[y].left) + 1;
+                    out_diff[y].left = x;
+
+                    for (x = width - 1, idx = i + (width - 1);
+                         x >= 0; --x, --idx)
+                    {
+                        if (!pixel_diff(buffer, old_buffer, palette, old_palette,
+                                        pixel_mask, palette_shift_mask, idx)) {
+                            continue;
+                        }
+                        out_diff[y].width = (x - out_diff[y].left) + 1;
+                        break;
+                    }
                     break;
                 }
-                break;
             }
         }
     }
@@ -1422,29 +1441,34 @@ odroid_buffer_diff_interlaced(uint8_t *buffer, uint8_t *old_buffer,
                               odroid_scanline *out_diff,
                               odroid_scanline *old_diff)
 {
+    bool palette_changed = false;
+
     // If the palette might've changed then we need to just copy the whole
     // old palette and scanline.
-    bool palette_changed = palette_shift_mask ?
-        palette_diff(palette, old_palette, pixel_mask + 1) : false;
-
-    if (palette_changed) {
-        memcpy(&palette[(pixel_mask+1)], old_palette,
-               (pixel_mask + 1) * sizeof(uint16_t));
-
-        for (int y = 1 - field; y < height; y += 2) {
-            int idx = y * stride;
-            for (int x = 0; x < width; ++x) {
-                buffer[idx+x] = (old_buffer[idx+x] & pixel_mask) |
-                                palette_shift_mask;
-            }
+    if (old_buffer) {
+        if (palette_shift_mask) {
+            palette_changed = palette_diff(palette, old_palette, pixel_mask + 1);
         }
-    } else {
-        // If the palette didn't change then no pixels in this frame will have
-        // the palette_shift bit set, so this may cause over-diffing after
-        // palette changes but is otherwise ok.
-        pixel_mask |= palette_shift_mask;
-        palette_shift_mask = 0;
-        palette = NULL;
+
+        if (palette_changed) {
+            memcpy(&palette[(pixel_mask+1)], old_palette,
+                   (pixel_mask + 1) * sizeof(uint16_t));
+
+            for (int y = 1 - field; y < height; y += 2) {
+                int idx = y * stride;
+                for (int x = 0; x < width; ++x) {
+                    buffer[idx+x] = (old_buffer[idx+x] & pixel_mask) |
+                                    palette_shift_mask;
+                }
+            }
+        } else {
+            // If the palette didn't change then no pixels in this frame will have
+            // the palette_shift bit set, so this may cause over-diffing after
+            // palette changes but is otherwise ok.
+            pixel_mask |= palette_shift_mask;
+            palette_shift_mask = 0;
+            palette = NULL;
+        }
     }
 
     odroid_buffer_diff_internal(buffer + (field * stride),
@@ -1459,7 +1483,7 @@ odroid_buffer_diff_interlaced(uint8_t *buffer, uint8_t *old_buffer,
         if ((y % 2) ^ field) {
             out_diff[y].width = 0;
             out_diff[y].repeat = 1;
-            if (!palette_changed) {
+            if (!palette_changed && old_buffer) {
                 int idx = (y * stride) + old_diff[y].left;
                 memcpy(&buffer[idx], &old_buffer[idx], old_diff[y].width);
             }
