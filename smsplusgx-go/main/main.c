@@ -26,7 +26,7 @@ const char* SD_BASE_PATH = "/sd";
 #define AUDIO_SAMPLE_RATE (32000)
 
 #define FRAME_CHECK 10
-#if 1
+#if 0
 #define INTERLACE_ON_THRESHOLD 8
 #define INTERLACE_OFF_THRESHOLD 10
 #elif 0
@@ -833,9 +833,11 @@ void app_main(void)
                                    update->diff);
             }
 
+#if 1
             // Send update data to video queue on other core
             void *arg = (void*)update;
             xQueueSend(vidQueue, &arg, portMAX_DELAY);
+#endif
 
             // Flip the update struct so we don't start writing into it while
             // the second core is still updating the screen.
@@ -857,6 +859,7 @@ void app_main(void)
         int elapsedTime = (stopTime > startTime) ?
             (stopTime - startTime) :
             ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
+#if 1
         skipFrame = (!skipFrame && elapsedTime > frameTime);
 
         // Use interlacing if we drop too many frames
@@ -869,6 +872,7 @@ void app_main(void)
             }
             renderedFrames = 0;
         }
+#endif
 
         // Create a buffer for audio if needed
         if (!audioBuffer || audioBufferCount < snd.sample_count)
@@ -894,7 +898,7 @@ void app_main(void)
 
             if (muteFrameCount < 60 * 2)
             {
-                // When the emulator starts, audible poping is generated.
+                // When the emulator starts, audible popping is generated.
                 // Audio should be disabled during this startup period.
                 sample = 0;
                 ++muteFrameCount;
@@ -909,7 +913,7 @@ void app_main(void)
 
         // send audio
 
-        odroid_audio_submit((short*)audioBuffer, snd.sample_count - 1);
+        odroid_audio_submit((short*)audioBuffer, snd.sample_count);
 
 
         stopTime = xthal_get_ccount();
@@ -927,7 +931,7 @@ void app_main(void)
         if (frame == 60)
         {
           float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
-          float fps = (60 - skippedFrames) / (frame / seconds) * 60.f;
+          float fps = (frame / seconds);
 
 
           printf("HEAP:0x%x, FPS:%f, INT:%d, SKIP:%d, BATTERY:%d [%d]\n", esp_get_free_heap_size(), fps, interlacedFrames, skippedFrames, battery.millivolts, battery.percentage);
