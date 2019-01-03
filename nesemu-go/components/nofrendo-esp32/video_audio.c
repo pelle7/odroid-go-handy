@@ -69,8 +69,7 @@ struct update_meta {
 odroid_volume_level Volume;
 int scaling_enabled = 1;
 int previous_scaling_enabled = 1;
-TaskHandle_t ioTask;
-TaskHandle_t mainTask;
+QueueHandle_t vidQueue;
 
 
 //Seemingly, this will be called only once. Should call func with a freq of frequency,
@@ -272,48 +271,20 @@ static void IRAM_ATTR custom_blit(bitmap_t *bmp, short interlace) {
                          update->stride, PIXEL_MASK, 0, update->diff);
    }
 
-   if (xTaskNotifyWait(0, ULONG_MAX, NULL, portMAX_DELAY) != pdPASS)
-   {
-      printf("Failed to wait for IO task\n");
-   }
-   if (xTaskNotify(ioTask, (update == &update1) ? 1 : 2,
-                   eSetValueWithoutOverwrite) != pdPASS)
-   {
-      printf("Failed to notify IO task\n");
-   }
+   xQueueSend(vidQueue, &update, portMAX_DELAY);
 }
 
 
 //This runs on core 1.
-volatile bool ioTaskIsRunning = false;
-static void ioTaskCallback(void *arg) {
-    ioTaskIsRunning = true;
+volatile bool vidTaskIsRunning = false;
+static void vidTaskCallback(void *arg) {
+    vidTaskIsRunning = true;
     while(1)
     {
-        // We could actually receive here and run the next frame of emulation
-        // in parallel with updating the screen, but limited bandwidth means it
-        // has a nasty visible effect on the screen update.
-        uint32_t taskId;
-        if (xTaskNotifyWait(0, ULONG_MAX, &taskId, portMAX_DELAY) != pdPASS)
-        {
-           printf("xTaskNotifyWait failed in ioTask()\n");
-           continue;
-        }
+        struct update_meta *update = NULL;
+        xQueuePeek(vidQueue, &update, portMAX_DELAY);
 
-        struct update_meta *update;
-        if (taskId == 0) {
-           // Exit
-           break;
-        } else if (taskId == 1) {
-           // Update on update object number 1
-           update = &update1;
-        } else if (taskId == 2) {
-           // Update on update object number 2
-           update = &update2;
-        } else {
-           printf("Unrecognised task!\n");
-           continue;
-        }
+        if (!update) break;
 
         bool scale_changed = (previous_scaling_enabled != scaling_enabled);
         if (scale_changed)
@@ -335,10 +306,7 @@ static void ioTaskCallback(void *arg) {
                                  update->stride, PIXEL_MASK,
                                  myPalette);
 
-        if (xTaskNotify(mainTask, 1, eSetValueWithoutOverwrite) != pdPASS)
-        {
-           printf("Failed to notify main task\n");
-        }
+        xQueueReceive(vidQueue, &update, portMAX_DELAY);
     }
 
 
@@ -346,7 +314,7 @@ static void ioTaskCallback(void *arg) {
     odroid_display_show_hourglass();
     odroid_display_unlock();
 
-    ioTaskIsRunning = false;
+    vidTaskIsRunning = false;
 
     vTaskDelete(NULL);
 
@@ -383,12 +351,12 @@ static void PowerDown()
     // Stop tasks
     printf("PowerDown: stopping tasks.\n");
 
-    // Clear audio to prevent studdering
+    // Clear audio to prevent stuttering
     odroid_audio_terminate();
 
-    xTaskNotify(ioTask, 0, eSetValueWithOverwrite);
-    while (ioTaskIsRunning) { vTaskDelay(10); }
-
+    void *exitVideoTask = NULL;
+    xQueueSend(vidQueue, &exitVideoTask, portMAX_DELAY);
+    while (vidTaskIsRunning) { vTaskDelay(10); }
 
     // state
     printf("PowerDown: Saving state.\n");
@@ -490,8 +458,9 @@ static int ConvertJoystickInput()
 
         odroid_audio_terminate();
 
-        xTaskNotify(ioTask, 0, eSetValueWithOverwrite);
-        while (ioTaskIsRunning) { vTaskDelay(10); }
+        void *exitVideoTask = NULL;
+        xQueueSend(vidQueue, &exitVideoTask, portMAX_DELAY);
+        while (vidTaskIsRunning) { vTaskDelay(10); }
 
         //odroid_display_drain_spi();
 
@@ -598,12 +567,8 @@ int osd_init()
 
    ili9341_blank_screen();
 
-   mainTask = xTaskGetCurrentTaskHandle();
-   xTaskCreatePinnedToCore(&ioTaskCallback, "ioTask", 2048, NULL, 5, &ioTask, 1);
-   if (xTaskNotify(mainTask, 1, eSetValueWithoutOverwrite) != pdPASS) {
-      printf("Failed to notify IO task during initialisation\n");
-      abort();
-   }
+   vidQueue = xQueueCreate(1, sizeof(struct update_meta *));
+   xTaskCreatePinnedToCore(&vidTaskCallback, "vidTask", 2048, NULL, 5, NULL, 1);
 
    osd_initinput();
 
