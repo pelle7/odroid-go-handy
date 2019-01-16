@@ -668,8 +668,16 @@ void app_main(void)
     	if (joystick.values[ODROID_INPUT_B]) smsButtons |= INPUT_BUTTON1;
 
         int smsSystem=0;
-    	if (joystick.values[ODROID_INPUT_START]) smsSystem |= INPUT_START;
-    	if (joystick.values[ODROID_INPUT_SELECT]) smsSystem |= INPUT_PAUSE;
+		if (sms.console == CONSOLE_SMS||sms.console == CONSOLE_SMS2)
+		{
+			if (joystick.values[ODROID_INPUT_START]) smsSystem |= INPUT_PAUSE;
+			if (joystick.values[ODROID_INPUT_SELECT]) smsSystem |= INPUT_START;
+		}
+		else
+		{
+			if (joystick.values[ODROID_INPUT_START]) smsSystem |= INPUT_START;
+			if (joystick.values[ODROID_INPUT_SELECT]) smsSystem |= INPUT_PAUSE;
+		}
 
     	input.pad[0]=smsButtons;
         input.system=smsSystem;
