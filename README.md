@@ -1,7 +1,10 @@
 # go-play
 Retro emulation for the ODROID-GO
 
-This is just a fork containing a simple change to how the menu button works.
+This is just a fork containing some simple changes to the original ODROID-GO.
 
-When playing a game, quick pressing the menu button will just take you back to the menu, and long-pressing the menu button will save the gamestate and then take you back to the menu. This allows you to return to the menu without having to save the gamestate. With the unforked version, the only way of doing this is to use the power switch.
+1. More intuitive mapping of the Start/Pause Button for SMS (see: https://forum.odroid.com/viewtopic.php?f=159&t=33470)
+2. Changes to the menu buttons from gentleben (see: https://forum.odroid.com/viewtopic.php?f=159&t=31982&p=235847&hilit=go+play#p235847)
+3. A nicer Hourglas :)
 
+More changes will follow.
