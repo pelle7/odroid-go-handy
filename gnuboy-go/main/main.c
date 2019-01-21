@@ -343,7 +343,7 @@ static void LoadState(const char* cartName)
         }
     }
 
-
+	pal_set(odroid_settings_GBPalette_get());
     Volume = odroid_settings_Volume_get();
 }
 
@@ -678,6 +678,12 @@ void app_main(void)
             odroid_settings_ScaleDisabled_set(ODROID_SCALE_DISABLE_GB, scaling_enabled ? 0 : 1);
         }
 
+		// Cycle through palets
+		if (joystick.values[ODROID_INPUT_START] && !lastJoysticState.values[ODROID_INPUT_LEFT] && joystick.values[ODROID_INPUT_LEFT])
+        {
+			pal_next();
+			odroid_settings_GBPalette_set(pal_get());
+        }
 
         pad_set(PAD_UP, joystick.values[ODROID_INPUT_UP]);
         pad_set(PAD_RIGHT, joystick.values[ODROID_INPUT_RIGHT]);
