@@ -303,6 +303,31 @@ static void DoHome()
     esp_restart();
 }
 
+static void DoHomeNoSave()
+{
+    esp_err_t err;
+    uint16_t* param = 1;
+
+    // Clear audio to prevent studdering
+    printf("PowerDown: stopping audio.\n");
+    odroid_audio_terminate();
+
+
+    // Stop tasks
+    printf("PowerDown: stopping tasks.\n");
+
+    xQueueSend(vidQueue, &param, portMAX_DELAY);
+    while (videoTaskIsRunning) { vTaskDelay(1); }
+
+
+    // Set menu application
+    odroid_system_application_set(0);
+
+
+    // Reset
+    esp_restart();
+}
+
 void system_manage_sram(uint8 *sram, int slot, int mode)
 {
     printf("system_manage_sram\n");
@@ -629,11 +654,9 @@ void app_main(void)
         }
 
         // Note: this will cause an exception on 2nd Core in Debug mode
-        if (powerFrameCount > 60 * 2)
+        if (powerFrameCount > 60 * 1)
         {
-            // Turn Blue LED on. Power state change turns it off
-            odroid_system_led_set(1);
-            PowerDown();
+            DoHome();
         }
 
         if (previousState.values[ODROID_INPUT_VOLUME] && !joystick.values[ODROID_INPUT_VOLUME])
@@ -644,7 +667,7 @@ void app_main(void)
 
         if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && !joystick.values[ODROID_INPUT_MENU])
         {
-            DoHome();
+            DoHomeNoSave();
         }
 
 
