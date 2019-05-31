@@ -18,6 +18,7 @@
 #include "../components/odroid/odroid_system.h"
 #include "../components/odroid/odroid_display.h"
 #include "../components/odroid/odroid_sdcard.h"
+#include "../components/odroid/odroid_ui.h"
 
 #include <dirent.h>
 
@@ -73,12 +74,12 @@ void videoTask(void *arg)
         xQueueReceive(vidQueue, &param, portMAX_DELAY);
     }
 
-    odroid_display_lock_sms_display();
+    odroid_display_lock();
 
     // Draw hourglass
     odroid_display_show_hourglass();
 
-    odroid_display_unlock_sms_display();
+    odroid_display_unlock();
 
     videoTaskIsRunning = false;
     vTaskDelete(NULL);
@@ -115,7 +116,7 @@ static void SaveState()
     char* romName = odroid_settings_RomFilePath_get();
     if (romName)
     {
-        odroid_display_lock_sms_display();
+        odroid_display_lock();
         odroid_display_drain_spi();
 
         char* fileName = odroid_util_GetFileName(romName);
@@ -152,7 +153,7 @@ static void SaveState()
         //     abort();
         // }
 
-        odroid_display_unlock_sms_display();
+        odroid_display_unlock();
 
         free(pathName);
         free(fileName);
@@ -183,7 +184,7 @@ static void LoadState(const char* cartName)
     char* romName = odroid_settings_RomFilePath_get();
     if (romName)
     {
-        odroid_display_lock_sms_display();
+        odroid_display_lock();
         odroid_display_drain_spi();
 
         char* fileName = odroid_util_GetFileName(romName);
@@ -219,7 +220,7 @@ static void LoadState(const char* cartName)
         //     abort();
         // }
 
-        odroid_display_unlock_sms_display();
+        odroid_display_unlock();
 
         free(pathName);
         free(fileName);
@@ -242,6 +243,18 @@ static void LoadState(const char* cartName)
     }
 
     Volume = odroid_settings_Volume_get();
+}
+
+bool QuickSaveState(FILE* f)
+{
+	system_save_state(f);
+    return true;
+}
+
+bool QuickLoadState(FILE* f)
+{
+    system_load_state(f);
+    return true;
 }
 
 static void PowerDown()
@@ -608,6 +621,9 @@ void app_main(void)
     bool ignoreMenuButton = previousState.values[ODROID_INPUT_MENU];
 
     scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_SMS) ? false : true;
+    
+    QuickSaveSetBuffer( (void*)(0x3f800000 + (0x100000 * 3) + (0x100000 / 2)));
+    odroid_ui_debug_enter_loop();
 
     while (true)
     {
@@ -636,10 +652,14 @@ void app_main(void)
             PowerDown();
         }
 
-        if (previousState.values[ODROID_INPUT_VOLUME] && !joystick.values[ODROID_INPUT_VOLUME])
+        if (joystick.values[ODROID_INPUT_VOLUME])
         {
-            odroid_audio_volume_change();
-            printf("main: Volume=%d\n", odroid_audio_volume_get());
+        		bool restart_menu = odroid_ui_menu(restart_menu);
+            while (restart_menu) {
+              uint8_t tmp = currentFramebuffer ? 0 : 1;
+      		  xQueueSend(vidQueue, &framebuffer[currentFramebuffer], portMAX_DELAY);
+		      restart_menu = odroid_ui_menu(restart_menu);
+            }
         }
 
         if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && !joystick.values[ODROID_INPUT_MENU])
@@ -752,7 +772,9 @@ void app_main(void)
         {
             system_frame(0);
 
-            xQueueSend(vidQueue, &bitmap.data, portMAX_DELAY);
+			if (!config_speedup || (frame % 10) == 0) {
+            		xQueueSend(vidQueue, &bitmap.data, portMAX_DELAY);
+            	}
 
             currentFramebuffer = currentFramebuffer ? 0 : 1;
             bitmap.data = framebuffer[currentFramebuffer];
@@ -762,6 +784,7 @@ void app_main(void)
             system_frame(1);
         }
 
+        if (!config_speedup) {
         // Create a buffer for audio if needed
         if (!audioBuffer || audioBufferCount < snd.sample_count)
         {
@@ -802,6 +825,7 @@ void app_main(void)
         // send audio
 
         odroid_audio_submit((short*)audioBuffer, snd.sample_count - 1);
+        }
 
 
         stopTime = xthal_get_ccount();

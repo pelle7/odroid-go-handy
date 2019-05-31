@@ -23,6 +23,7 @@
 #include "../components/odroid/odroid_sdcard.h"
 #include "../components/odroid/odroid_display.h"
 #include "../components/odroid/odroid_input.h"
+#include "../components/odroid/odroid_ui.h"
 
 const char* SD_BASE_PATH = "/sd";
 static char* ROM_DATA = (char*)0x3f800000;
@@ -188,6 +189,8 @@ int app_main(void)
 
 	printf("NoFrendo start!\n");
 
+    QuickSaveSetBuffer( (void*)(0x3f800000 + (0x100000 * 1)) );
+    odroid_ui_debug_enter_loop();
 	char* args[1] = { fileName };
 	nofrendo_main(1, args);
 

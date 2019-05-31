@@ -38,6 +38,7 @@
 #include "../components/odroid/odroid_audio.h"
 #include "../components/odroid/odroid_system.h"
 #include "../components/odroid/odroid_sdcard.h"
+#include "../components/odroid/odroid_ui.h"
 
 
 extern int debug_trace;
@@ -106,7 +107,7 @@ void run_to_vblank()
   /* VBLANK BEGIN */
 
   //vid_end();
-  if ((frame % 2) == 0)
+  if (((frame % 2) == 0 && !config_speedup) || (frame % 10) == 0)
   {
       xQueueSend(vidQueue, &framebuffer, portMAX_DELAY);
 
@@ -185,11 +186,11 @@ void videoTask(void *arg)
 
 
     // Draw hourglass
-    odroid_display_lock_gb_display();
+    odroid_display_lock();
 
     odroid_display_show_hourglass();
 
-    odroid_display_unlock_gb_display();
+    odroid_display_unlock();
 
 
     videoTaskIsRunning = false;
@@ -219,7 +220,7 @@ void audioTask(void* arg)
     {
         break;
     }
-    else
+    else if (!config_speedup)
     {
         pcm_submit();
     }
@@ -345,6 +346,25 @@ static void LoadState(const char* cartName)
 
 
     Volume = odroid_settings_Volume_get();
+}
+
+bool QuickSaveState(FILE* f)
+{
+	savestate(f);
+	fclose(f);
+    return true;
+}
+
+bool QuickLoadState(FILE *f)
+{
+    loadstate(f);
+    fclose(f);
+    
+    vram_dirty();
+    pal_dirty();
+    sound_dirty();
+    mem_updatemap();
+    return true;
 }
 
 static void PowerDown()
@@ -597,6 +617,9 @@ void app_main(void)
     scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_GB) ? false : true;
 
     odroid_input_gamepad_read(&lastJoysticState);
+    
+    	QuickSaveSetBuffer( (void*)(0x3f800000 + (0x100000 * 3) + (0x100000 / 2)));
+    odroid_ui_debug_enter_loop();
 
     while (true)
     {
@@ -640,10 +663,14 @@ void app_main(void)
         }
 
 
-        if (!lastJoysticState.values[ODROID_INPUT_VOLUME] && joystick.values[ODROID_INPUT_VOLUME])
+        if (joystick.values[ODROID_INPUT_VOLUME])
         {
-            odroid_audio_volume_change();
-            printf("main: Volume=%d\n", odroid_audio_volume_get());
+            bool restart_menu = odroid_ui_menu(restart_menu);
+            while (restart_menu) {
+            uint8_t tmp = currentBuffer ? 0 : 1;
+      		  xQueueSend(vidQueue, &displayBuffer[tmp], portMAX_DELAY);
+		      restart_menu = odroid_ui_menu(restart_menu);
+            }
         }
 
 
