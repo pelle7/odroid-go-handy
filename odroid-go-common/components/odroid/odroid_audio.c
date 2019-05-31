@@ -8,6 +8,7 @@
 
 
 
+// #define AUDIO_MUTE
 #define I2S_NUM (I2S_NUM_0)
 
 static int AudioSink = ODROID_AUDIO_SINK_SPEAKER;
@@ -24,6 +25,9 @@ odroid_volume_level odroid_audio_volume_get()
 
 void odroid_audio_volume_set(odroid_volume_level value)
 {
+#ifdef AUDIO_MUTE
+    value = ODROID_VOLUME_LEVEL0;
+#endif
     if (value >= ODROID_VOLUME_LEVEL_COUNT)
     {
         printf("odroid_audio_volume_set: value out of range (%d)\n", value);
@@ -258,4 +262,9 @@ void odroid_audio_submit(short* stereoAudioBuffer, int frameCount)
 int odroid_audio_sample_rate_get()
 {
     return audio_sample_rate;
+}
+
+void odroid_audio_mute()
+{
+	i2s_zero_dma_buffer(I2S_NUM);	
 }
