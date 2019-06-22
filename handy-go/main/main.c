@@ -106,12 +106,12 @@ void videoTask(void *arg)
         xQueueReceive(vidQueue, &param, portMAX_DELAY);
     }
 
-    odroid_display_lock_my_display();
+    odroid_display_lock_display();
 
     // Draw hourglass
     odroid_display_show_hourglass();
 
-    odroid_display_unlock_my_display();
+    odroid_display_unlock_display();
 
     videoTaskIsRunning = false;
     vTaskDelete(NULL);
@@ -152,6 +152,16 @@ bool DoSaveState(const char* pathName) {
 }
 
 bool DoLoadState(const char* pathName) {
+    return true;
+}
+
+bool QuickSaveState(FILE* f)
+{
+    return true;
+}
+
+bool QuickLoadState(FILE* f)
+{
     return true;
 }
 
@@ -385,11 +395,9 @@ void odroidgo_retro_init_post() {
 	retro_set_input_state(&odroid_retro_input_state_t);
 }
 
-//char cartName[1024];
 void app_main(void)
 {
     printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
-    my_odroid_debug_start();
 	
     framebuffer[0] = heap_caps_malloc(160 * 102 * 2, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
     if (!framebuffer[0]) abort();
@@ -502,7 +510,7 @@ void app_main(void)
         abort();
     }
         
-    odroid_display_lock_my_display();
+    odroid_display_lock_display();
     odroid_display_drain_spi();
     
 	printf("LYNX-hande: 001\n");
@@ -519,9 +527,8 @@ void app_main(void)
 	printf("Retro: Info.valid_extensions  : %s\n", retro_info.valid_extensions);
 	printf("Retro: Info.block_extract     : %d\n", retro_info.block_extract);
 	
-	odroid_display_unlock_my_display();
+	odroid_display_unlock_display();
 	
-	my_odroid_debug_start();
 	if (!retro_load_game(&odroid_game)) {
 	    printf("LYNX-handy: 003 Gameload: Error\n");
 	} else {
@@ -557,8 +564,10 @@ void app_main(void)
 
     scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_SMS) ? false : true;
     
-    my_odroid_debug_enter_loop();
+    odroid_ui_debug_enter_loop();
     startTime = xthal_get_ccount();
+    
+    bool menu_restart = false;
 
     while (true)
     {
@@ -614,9 +623,9 @@ void app_main(void)
             PowerDown();
         }
 
-        if (joystick.values[ODROID_INPUT_VOLUME])
+        if (joystick.values[ODROID_INPUT_VOLUME] || menu_restart)
         {
-            myui_test();
+            menu_restart = odroid_ui_menu(menu_restart);
         }
 
         if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && !joystick.values[ODROID_INPUT_MENU])

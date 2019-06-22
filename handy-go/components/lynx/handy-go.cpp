@@ -329,13 +329,6 @@ static void check_variables(void)
       }
    }
 }
-#ifdef __cplusplus
-extern "C" {
-#endif
-extern void my_odroid_debug_start();
-#ifdef __cplusplus
-}
-#endif
 
 static bool lynx_initialize_system(const char* gamepath)
 {
@@ -352,8 +345,6 @@ static bool lynx_initialize_system(const char* gamepath)
    
   printf("DEBUG-CC-002; game: %s; rom: %s\n", gamepath, romfilename);
   
-  my_odroid_debug_start();
-
    lynx = new CSystem(gamepath, romfilename, true);
 
    if (!lynx) {
