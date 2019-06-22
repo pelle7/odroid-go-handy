@@ -68,6 +68,10 @@ bool isBackLightIntialized = false;
 #define NES_GAME_WIDTH (256)
 #define NES_GAME_HEIGHT (224) /* NES_VISIBLE_HEIGHT */
 
+// Lynx
+#define LYNX_GAME_WIDTH (160)
+#define LYNX_GAME_HEIGHT (102)
+
 
 /*
  The ILI9341 needs a bunch of command/argument values to be initialized. They are stored in this struct.
@@ -1193,6 +1197,121 @@ void ili9341_write_frame_nes(uint8_t* buffer, uint16_t* myPalette, uint8_t scale
     send_continue_wait();
 
     odroid_display_unlock_nes_display();
+}
+
+void ili9341_write_frame_lynx(uint16_t* buffer, uint16_t* myPalette, uint8_t scale)
+{
+    short x, y;
+    odroid_display_lock_display();
+    //xTaskToNotify = xTaskGetCurrentTaskHandle();
+    
+    if (buffer == NULL)
+    {
+        // clear the buffer
+        for (int i = 0; i < LINE_BUFFERS; ++i)
+        {
+            memset(line[i], 0, 320 * sizeof(uint16_t) * LINE_COUNT);
+        }
+
+        // clear the screen
+        send_reset_drawing(0, 0, 320, 240);
+
+        for (y = 0; y < 240; y += LINE_COUNT)
+        {
+            uint16_t* line_buffer = line_buffer_get();
+            send_continue_line(line_buffer, 320, LINE_COUNT);
+        }
+    }
+    else
+    {
+        uint16_t* framePtr = buffer;
+        
+        // scale = 0;
+
+        if (scale)
+        {
+            const uint16_t displayWidth = 320;
+            
+            send_reset_drawing(0, /*(240-102*2)/2*/ 18, displayWidth, LYNX_GAME_HEIGHT*2);
+
+            for (y = 0; y < LYNX_GAME_HEIGHT; y += 2)
+            {
+              uint16_t* line_buffer = line_buffer_get();
+              uint16_t* line_buffer_ptr = line_buffer; 
+			  for (short i = 0; i < 2; ++i) // LINE_COUNT
+              {
+                  int index = (i*2) * displayWidth;
+
+                  int bufferIndex = ((y + i) * LYNX_GAME_WIDTH);
+
+                  for (x = 0; x < LYNX_GAME_WIDTH; ++x)
+                  {
+                    uint16_t val = framePtr[bufferIndex++];
+                    line_buffer[index] = val;
+                    line_buffer[index+1] = val;
+                    line_buffer[index+displayWidth] = val;
+                    line_buffer[index+displayWidth+1] = val;
+                    index+=2;
+                  }
+              }
+              /*
+              {
+                  for (x = 0; x < LYNX_GAME_WIDTH; ++x)
+                  {
+                    *line_buffer_ptr = *framePtr;
+                    line_buffer_ptr+=2;
+                    framePtr++;
+                  }
+                  line_buffer_ptr+=320;
+
+                  for (x = 0; x < LYNX_GAME_WIDTH; ++x)
+                  {
+                    *line_buffer_ptr = *framePtr;
+                    line_buffer_ptr+=2;
+                    framePtr++;
+                  }
+              }
+              */
+              // display
+              send_continue_line(line_buffer, displayWidth, 4);
+            }
+        }
+        else
+        {
+            send_reset_drawing((320 / 2) - (LYNX_GAME_WIDTH / 2), (240 / 2) - (LYNX_GAME_HEIGHT / 2), LYNX_GAME_WIDTH, LYNX_GAME_HEIGHT);
+
+            for (y = 0; y < LYNX_GAME_HEIGHT; y += LINE_COUNT)
+            {
+              int linesWritten = 0;
+              uint16_t* line_buffer = line_buffer_get();
+
+              for (short i = 0; i < LINE_COUNT; ++i)
+              {
+                  if((y + i) >= LYNX_GAME_HEIGHT)
+                    break;
+
+                  int index = (i) * LYNX_GAME_WIDTH;
+                  int bufferIndex = ((y + i) * LYNX_GAME_WIDTH);
+
+                  for (x = 0; x < LYNX_GAME_WIDTH; ++x)
+                  {
+                    //line_buffer[index++] = 22; // framePtr[bufferIndex++];//myPalette[framePtr[bufferIndex++]];
+                    line_buffer[index++] = framePtr[bufferIndex++];
+                  }
+
+                  ++linesWritten;
+              }
+
+              // display
+              send_continue_line(line_buffer, LYNX_GAME_WIDTH, linesWritten);
+              // break;
+            }
+        }
+    }
+
+    send_continue_wait();
+
+    odroid_display_unlock_display();
 }
 
 // void ili9341_write_frame(uint16_t* buffer)
