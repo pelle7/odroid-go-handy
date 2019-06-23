@@ -65,6 +65,7 @@ struct update_meta {
     odroid_scanline diff[NES_VISIBLE_HEIGHT];
     uint8_t *buffer;
     int stride;
+    bool full_refresh;
 };
 
 odroid_volume_level Volume;
@@ -246,11 +247,6 @@ static struct update_meta *update = &update2;
 #define INTERLACE_THRESHOLD ((NES_SCREEN_WIDTH*NES_VISIBLE_HEIGHT)/2)
 
 static void IRAM_ATTR custom_blit(bitmap_t *bmp, short interlace) {
-   if (config_speedup) {
-        if (speed_frame_counter++%10!=0) {
-            return;
-        }
-   }
    if (!bmp) {
       printf("custom_blit called with NULL bitmap!\n");
       abort();
@@ -312,11 +308,11 @@ static void vidTaskCallback(void *arg) {
         }
 
         ili9341_write_frame_8bit(update->buffer,
-                                 scale_changed ? NULL : update->diff,
+                                 scale_changed|update->full_refresh ? NULL : update->diff,
                                  NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT,
                                  update->stride, PIXEL_MASK,
                                  myPalette);
-
+        update->full_refresh = false;
         xQueueReceive(vidQueue, &update, portMAX_DELAY);
     }
 
@@ -388,7 +384,6 @@ static void PowerDown()
 static odroid_gamepad_state previousJoystickState;
 static bool ignoreMenuButton;
 static ushort powerFrameCount;
-static bool restart_menu = false;
 
 static int ConvertJoystickInput()
 {
@@ -441,9 +436,15 @@ static int ConvertJoystickInput()
 			result |= (1 << 6);
 
 
-    if (state.values[ODROID_INPUT_VOLUME] || restart_menu)
+    if (state.values[ODROID_INPUT_VOLUME])
     {
-        restart_menu = odroid_ui_menu(restart_menu);
+        bool restart_menu = false;
+        do {
+            restart_menu = odroid_ui_menu(restart_menu);
+            update->full_refresh = true;
+            xQueueSend(vidQueue, &update, portMAX_DELAY);
+            while (update->full_refresh) { vTaskDelay(10); }
+        } while(restart_menu);
     }
 
     if (!ignoreMenuButton && previousJoystickState.values[ODROID_INPUT_MENU] && state.values[ODROID_INPUT_MENU])
@@ -485,12 +486,9 @@ static int ConvertJoystickInput()
 
         printf("Stopping video queue.\n");
 
-        void* arg = 1;
-        xQueueSend(vidQueue, &arg, portMAX_DELAY);
-        while(exitVideoTaskFlag)
-        {
-             vTaskDelay(10);
-        }
+        void *exitVideoTask = NULL;
+        xQueueSend(vidQueue, &exitVideoTask, portMAX_DELAY);
+        while (vidTaskIsRunning) { vTaskDelay(10); }
 
         // Set menu application
         odroid_system_application_set(0);

@@ -689,12 +689,12 @@ void app_main(void)
 
         if (joystick.values[ODROID_INPUT_VOLUME])
         {
-            bool restart_menu = odroid_ui_menu(restart_menu);
-            while (restart_menu) {
-            uint8_t tmp = currentBuffer ? 0 : 1;
-      		  xQueueSend(vidQueue, &displayBuffer[tmp], portMAX_DELAY);
-		      restart_menu = odroid_ui_menu(restart_menu);
-            }
+            bool restart_menu = false;
+            do {
+              restart_menu = odroid_ui_menu(restart_menu);
+              uint8_t tmp = currentBuffer ? 0 : 1;
+              xQueueSend(vidQueue, &displayBuffer[tmp], portMAX_DELAY);
+            } while(restart_menu);
         }
 
 

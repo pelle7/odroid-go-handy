@@ -335,7 +335,7 @@ typedef struct odroid_ui_window
     uint8_t height;
     
     uint8_t entry_count;
-    odroid_ui_entry* entries[10];
+    odroid_ui_entry* entries[16];
 } odroid_ui_window;
 
 odroid_ui_entry *odroid_ui_create_entry(odroid_ui_window *window, odroid_ui_func_update_def func_update, odroid_ui_func_toggle_def func_toggle) {
@@ -400,6 +400,14 @@ void odroid_ui_func_update_scale(odroid_ui_entry *entry) {
 	sprintf(entry->text, "%-9s: %d", "scale", scaling_enabled);
 }
 
+void odroid_ui_func_update_brightness(odroid_ui_entry *entry) {
+    if (!is_backlight_initialized()) {
+        sprintf(entry->text, "%-9s: %s", "bright", "n/a");
+        return;
+    }
+    sprintf(entry->text, "%-9s: %d", "bright", odroid_settings_Backlight_get());
+}
+
 void odroid_ui_func_update_quicksave(odroid_ui_entry *entry) {
 	sprintf(entry->text, "%-9s: %s", "quicksave", entry->data);
 }
@@ -428,7 +436,17 @@ odroid_ui_func_toggle_rc odroid_ui_func_toggle_scale(odroid_ui_entry *entry, odr
 	return ODROID_UI_FUNC_TOGGLE_RC_MENU_RESTART;
 }
 
+odroid_ui_func_toggle_rc odroid_ui_func_toggle_brightness(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
+    if (joystick->values[ODROID_INPUT_A] || joystick->values[ODROID_INPUT_RIGHT]) {
+        odroid_Backlight_set(odroid_Backlight_get() + 1);
+    } else if (joystick->values[ODROID_INPUT_LEFT]) {
+        odroid_Backlight_set(odroid_Backlight_get() - 1);
+    }
+    return ODROID_UI_FUNC_TOGGLE_RC_CHANGED;
+}
+
 odroid_ui_func_toggle_rc odroid_ui_func_toggle_quicksave(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
+    if (!joystick->values[ODROID_INPUT_A]) return ODROID_UI_FUNC_TOGGLE_RC_NOTHING; 
 	if (!MyQuickSaveState()) {
 		sprintf(entry->data, "ERR");
 		return ODROID_UI_FUNC_TOGGLE_RC_NOTHING;
@@ -439,6 +457,7 @@ odroid_ui_func_toggle_rc odroid_ui_func_toggle_quicksave(odroid_ui_entry *entry,
 }
 
 odroid_ui_func_toggle_rc odroid_ui_func_toggle_quickload(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
+    if (!joystick->values[ODROID_INPUT_A]) return ODROID_UI_FUNC_TOGGLE_RC_NOTHING;
     if (!quicksave_done) {
     		return ODROID_UI_FUNC_TOGGLE_RC_NOTHING;
     }
@@ -465,6 +484,7 @@ int exec_menu(bool *restart_menu) {
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_speedup, &odroid_ui_func_toggle_speedup);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_volume, &odroid_ui_func_toggle_volume);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_scale, &odroid_ui_func_toggle_scale);
+	odroid_ui_create_entry(&window, &odroid_ui_func_update_brightness, &odroid_ui_func_toggle_brightness);
 	
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_quicksave, &odroid_ui_func_toggle_quicksave);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_quickload, &odroid_ui_func_toggle_quickload);
@@ -501,7 +521,13 @@ int exec_menu(bool *restart_menu) {
 	        } else if (joystick.values[ODROID_INPUT_A]) {
 	        		last_key = ODROID_INPUT_A;
 	        		entry_rc = window.entries[selected]->func_toggle(window.entries[selected], &joystick);
-	        }
+	        } else if (joystick.values[ODROID_INPUT_LEFT]) {
+                last_key = ODROID_INPUT_LEFT;
+                entry_rc = window.entries[selected]->func_toggle(window.entries[selected], &joystick);
+            } else if (joystick.values[ODROID_INPUT_RIGHT]) {
+                last_key = ODROID_INPUT_RIGHT;
+                entry_rc = window.entries[selected]->func_toggle(window.entries[selected], &joystick);
+            }
         }
         switch (entry_rc) {
         case ODROID_UI_FUNC_TOGGLE_RC_NOTHING:
@@ -528,6 +554,9 @@ int exec_menu(bool *restart_menu) {
     }
     wait_for_key(last_key);
     odroid_ui_window_clear(&window);
+    for (int i = 0; i < window.entry_count; i++) {
+        free(window.entries[i]);
+    }
    return last_key;
 }
 

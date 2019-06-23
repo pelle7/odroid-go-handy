@@ -473,7 +473,7 @@ void nes_emulate(void)
         if (frame == 60)
         {
           float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
-          float fps = (60 - skippedFrames) / (frame / seconds) * 60.f;
+          float fps = (60 - skippedFrames) / (frame * seconds) * 60.f;
 
           odroid_input_battery_level_read(&battery);
 

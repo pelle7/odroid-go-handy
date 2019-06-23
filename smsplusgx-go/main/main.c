@@ -70,6 +70,7 @@ struct bitmap_meta {
     int width;
     int height;
     int stride;
+    bool full_refresh;
 };
 static struct bitmap_meta update1 = {0,};
 static struct bitmap_meta update2 = {0,};
@@ -104,9 +105,10 @@ void videoTask(void *arg)
         }
 
         ili9341_write_frame_8bit(meta->buffer,
-                                 scale_changed ? NULL : meta->diff,
+                                 scale_changed|meta->full_refresh ? NULL : meta->diff,
                                  meta->width, meta->height,
                                  meta->stride, PIXEL_MASK, meta->palette);
+        meta->full_refresh = false;
 
         odroid_input_battery_level_read(&battery);
 
@@ -357,7 +359,7 @@ static void DoHome()
 static void DoHomeNoSave()
 {
     esp_err_t err;
-    uint16_t* param = 1;
+    void *exitVideoTask = NULL;
 
     // Clear audio to prevent studdering
     printf("PowerDown: stopping audio.\n");
@@ -367,7 +369,7 @@ static void DoHomeNoSave()
     // Stop tasks
     printf("PowerDown: stopping tasks.\n");
 
-    xQueueSend(vidQueue, &param, portMAX_DELAY);
+    xQueueSend(vidQueue, &exitVideoTask, portMAX_DELAY);
     while (videoTaskIsRunning) { vTaskDelay(1); }
 
 
@@ -725,12 +727,13 @@ void app_main(void)
 
         if (joystick.values[ODROID_INPUT_VOLUME])
         {
-        		bool restart_menu = odroid_ui_menu(restart_menu);
-            while (restart_menu) {
-              uint8_t tmp = currentFramebuffer ? 0 : 1;
-      		  xQueueSend(vidQueue, &framebuffer[currentFramebuffer], portMAX_DELAY);
-		      restart_menu = odroid_ui_menu(restart_menu);
-            }
+        		bool restart_menu = false;
+            do {
+              restart_menu = odroid_ui_menu(restart_menu);
+              update->full_refresh = true;
+              xQueueSend(vidQueue, &update, portMAX_DELAY);
+              while (update->full_refresh) { vTaskDelay(10); }
+            } while(restart_menu);
         }
 
         if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && !joystick.values[ODROID_INPUT_MENU])
