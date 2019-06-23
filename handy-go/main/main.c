@@ -106,12 +106,12 @@ void videoTask(void *arg)
         xQueueReceive(vidQueue, &param, portMAX_DELAY);
     }
 
-    odroid_display_lock_display();
+    odroid_display_lock();
 
     // Draw hourglass
     odroid_display_show_hourglass();
 
-    odroid_display_unlock_display();
+    odroid_display_unlock();
 
     videoTaskIsRunning = false;
     vTaskDelete(NULL);
@@ -395,6 +395,25 @@ void odroidgo_retro_init_post() {
 	retro_set_input_state(&odroid_retro_input_state_t);
 }
 
+extern uint32    gAudioEnabled;
+
+void menu_lynx_audio_update(odroid_ui_entry *entry) {
+    if (gAudioEnabled) {
+        sprintf(entry->text, "%-9s: %s", "audio", "on");
+    } else {
+        sprintf(entry->text, "%-9s: %s", "audio", "off");
+    }
+}
+
+odroid_ui_func_toggle_rc menu_lynx_audio_toggle(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
+    gAudioEnabled = !gAudioEnabled;
+    return ODROID_UI_FUNC_TOGGLE_RC_CHANGED;
+}
+
+void menu_lynx_init(odroid_ui_window *window) {
+    odroid_ui_create_entry(window, &menu_lynx_audio_update, &menu_lynx_audio_toggle);
+}
+
 void app_main(void)
 {
     printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
@@ -510,7 +529,7 @@ void app_main(void)
         abort();
     }
         
-    odroid_display_lock_display();
+    odroid_display_lock();
     odroid_display_drain_spi();
     
 	printf("LYNX-hande: 001\n");
@@ -527,7 +546,7 @@ void app_main(void)
 	printf("Retro: Info.valid_extensions  : %s\n", retro_info.valid_extensions);
 	printf("Retro: Info.block_extract     : %d\n", retro_info.block_extract);
 	
-	odroid_display_unlock_display();
+	odroid_display_unlock();
 	
 	if (!retro_load_game(&odroid_game)) {
 	    printf("LYNX-handy: 003 Gameload: Error\n");
@@ -625,7 +644,7 @@ void app_main(void)
 
         if (joystick.values[ODROID_INPUT_VOLUME] || menu_restart)
         {
-            menu_restart = odroid_ui_menu(menu_restart);
+            menu_restart = odroid_ui_menu_ext(menu_restart, &menu_lynx_init);
         }
 
         if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && !joystick.values[ODROID_INPUT_MENU])

@@ -262,15 +262,13 @@ static UBYTE* lynx_display_callback(ULONG objref)
       return (UBYTE*)framebuffer;
    
    video_cb(framebuffer, lynx_width, lynx_height, 160*VIDEO_CORE_PIXELSIZE);
-/*
+
    if(gAudioBufferPointer > 0)
    {
       int f = gAudioBufferPointer / 4; // /1 - 8 bit mono, /2 8 bit stereo, /4 16 bit stereo
       lynx_sound_stream_update(soundBuffer, gAudioBufferPointer);
       audio_batch_cb((const int16_t*)soundBuffer, f);
    }
-*/
-   gAudioBufferPointer = 0;
 
    newFrame = true;
    return (UBYTE*)framebuffer;

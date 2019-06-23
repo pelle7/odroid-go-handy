@@ -1049,7 +1049,7 @@ ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
 void ili9341_write_frame_lynx(uint16_t* buffer, uint16_t* myPalette, uint8_t scale)
 {
     short x, y;
-    odroid_display_lock_display();
+    odroid_display_lock();
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
     
     if (buffer == NULL)
@@ -1156,9 +1156,9 @@ void ili9341_write_frame_lynx(uint16_t* buffer, uint16_t* myPalette, uint8_t sca
         }
     }
 
-    send_continue_wait();
+    //send_continue_wait();
 
-    odroid_display_unlock_display();
+    odroid_display_unlock();
 }
 
 // void ili9341_write_frame(uint16_t* buffer)
