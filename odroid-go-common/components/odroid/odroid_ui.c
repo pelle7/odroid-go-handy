@@ -48,7 +48,7 @@ const char* SD_TMP_PATH_SAVE = "/sd/odroid/data/.quicksav.dat";
     
 char buf[42];
 
-int exec_menu(bool *restart_menu);
+int exec_menu(bool *restart_menu, odroid_ui_func_window_init_def func_window_init);
 
 void QuickSaveSetBuffer(void* data) {
    quicksave_buffer = data;
@@ -183,6 +183,10 @@ void wait_for_key(int last_key) {
 }
 
 bool odroid_ui_menu(bool restart_menu) {
+    return odroid_ui_menu_ext(restart_menu, NULL);
+}
+
+bool odroid_ui_menu_ext(bool restart_menu, odroid_ui_func_window_init_def func_window_init) {
     int last_key = -1;
 	int start_key = ODROID_INPUT_VOLUME;
 	bool shortcut_key = false;
@@ -257,7 +261,7 @@ bool odroid_ui_menu(bool restart_menu) {
     }
     restart_menu = false;
     if (!shortcut_key) {
-		last_key = exec_menu(&restart_menu);
+		last_key = exec_menu(&restart_menu, func_window_init);
 	}
     if (shortcut_key) {
     		draw_empty_line();
@@ -267,76 +271,6 @@ bool odroid_ui_menu(bool restart_menu) {
     odroid_display_unlock();
     return restart_menu;
 }
-
-#ifndef ODROID_UI_CALLCONV
-#  if defined(__GNUC__) && defined(__i386__) && !defined(__x86_64__)
-#    define ODROID_UI_CALLCONV __attribute__((cdecl))
-#  elif defined(_MSC_VER) && defined(_M_X86) && !defined(_M_X64)
-#    define ODROID_UI_CALLCONV __cdecl
-#  else
-#    define ODROID_UI_CALLCONV /* all other platforms only have one calling convention each */
-#  endif
-#endif
-
-#ifndef RETRO_API
-#  if defined(_WIN32) || defined(__CYGWIN__) || defined(__MINGW32__)
-#    ifdef RETRO_IMPORT_SYMBOLS
-#      ifdef __GNUC__
-#        define RETRO_API ODROID_UI_CALLCONV __attribute__((__dllimport__))
-#      else
-#        define RETRO_API ODROID_UI_CALLCONV __declspec(dllimport)
-#      endif
-#    else
-#      ifdef __GNUC__
-#        define RETRO_API ODROID_UI_CALLCONV __attribute__((__dllexport__))
-#      else
-#        define RETRO_API ODROID_UI_CALLCONV __declspec(dllexport)
-#      endif
-#    endif
-#  else
-#      if defined(__GNUC__) && __GNUC__ >= 4 && !defined(__CELLOS_LV2__)
-#        define RETRO_API ODROID_UI_CALLCONV __attribute__((__visibility__("default")))
-#      else
-#        define RETRO_API ODROID_UI_CALLCONV
-#      endif
-#  endif
-#endif
-
-typedef enum
-{
-    ODROID_UI_FUNC_TOGGLE_RC_NOTHING = 0,
-    ODROID_UI_FUNC_TOGGLE_RC_CHANGED = 1,
-    ODROID_UI_FUNC_TOGGLE_RC_MENU_RESTART = 2,
-    ODROID_UI_FUNC_TOGGLE_RC_MENU_CLOSE = 3,
-} odroid_ui_func_toggle_rc;
-
-typedef struct odroid_ui_entry odroid_ui_entry;
-typedef void (ODROID_UI_CALLCONV *odroid_ui_func_update_def)(odroid_ui_entry *entry);
-typedef odroid_ui_func_toggle_rc (ODROID_UI_CALLCONV *odroid_ui_func_toggle_def)(odroid_ui_entry *entry, odroid_gamepad_state *joystick);
-
-typedef struct odroid_ui_entry
-{
-    uint16_t x;
-    uint16_t y;
-    char text[64];
-    
-    char data[64];
-    
-    odroid_ui_func_update_def func_update;
-    odroid_ui_func_toggle_def func_toggle;
-} odroid_ui_entry;
-
-typedef struct odroid_ui_window
-{
-    uint16_t x;
-    uint16_t y;
-    
-    uint8_t width;
-    uint8_t height;
-    
-    uint8_t entry_count;
-    odroid_ui_entry* entries[16];
-} odroid_ui_window;
 
 odroid_ui_entry *odroid_ui_create_entry(odroid_ui_window *window, odroid_ui_func_update_def func_update, odroid_ui_func_toggle_def func_toggle) {
 	odroid_ui_entry *rc = (odroid_ui_entry*)malloc(sizeof(odroid_ui_entry));
@@ -471,7 +405,7 @@ odroid_ui_func_toggle_rc odroid_ui_func_toggle_quickload(odroid_ui_entry *entry,
 
 int selected = 0;
 
-int exec_menu(bool *restart_menu) {
+int exec_menu(bool *restart_menu, odroid_ui_func_window_init_def func_window_init) {
     int selected_last = selected;
 	int last_key = -1;
 	int counter = 0;
@@ -485,6 +419,10 @@ int exec_menu(bool *restart_menu) {
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_volume, &odroid_ui_func_toggle_volume);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_scale, &odroid_ui_func_toggle_scale);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_brightness, &odroid_ui_func_toggle_brightness);
+	
+	if (func_window_init) {
+	   func_window_init(&window);
+	}
 	
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_quicksave, &odroid_ui_func_toggle_quicksave);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_quickload, &odroid_ui_func_toggle_quickload);

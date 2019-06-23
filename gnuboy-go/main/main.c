@@ -458,6 +458,23 @@ static void DoMenuHomeNoSave()
     esp_restart();
 }
 
+uint restart_menu_timer = 0;
+
+void menu_gb_pal_update(odroid_ui_entry *entry) {
+    sprintf(entry->text, "%-9s: %d", "pal", pal_get());
+}
+
+odroid_ui_func_toggle_rc menu_gb_pal_toggle(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
+    pal_next();
+    odroid_settings_GBPalette_set(pal_get());
+    restart_menu_timer = 4;
+    return ODROID_UI_FUNC_TOGGLE_RC_MENU_RESTART;
+}
+
+void menu_gb_init(odroid_ui_window *window) {
+    odroid_ui_create_entry(window, &menu_gb_pal_update, &menu_gb_pal_toggle);
+}
+
 void app_main(void)
 {
     printf("gnuboy (%s-%s).\n", COMPILEDATE, GITREV);
@@ -644,6 +661,7 @@ void app_main(void)
     
     	QuickSaveSetBuffer( (void*)(0x3f800000 + (0x100000 * 3) + (0x100000 / 2)));
     odroid_ui_debug_enter_loop();
+    bool restart_menu = false;
 
     while (true)
     {
@@ -687,14 +705,18 @@ void app_main(void)
         }
 
 
-        if (joystick.values[ODROID_INPUT_VOLUME])
+        if (joystick.values[ODROID_INPUT_VOLUME] || restart_menu)
         {
-            bool restart_menu = false;
+            if (restart_menu_timer > 0) {
+               restart_menu_timer--;
+            } else {
             do {
-              restart_menu = odroid_ui_menu(restart_menu);
+              
+              restart_menu = odroid_ui_menu_ext(restart_menu, &menu_gb_init);
               uint8_t tmp = currentBuffer ? 0 : 1;
               xQueueSend(vidQueue, &displayBuffer[tmp], portMAX_DELAY);
-            } while(restart_menu);
+            } while(restart_menu_timer == 0 && restart_menu);
+            }
         }
 
 
