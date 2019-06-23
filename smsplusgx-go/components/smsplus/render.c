@@ -25,7 +25,6 @@
  ******************************************************************************/
 
 #include "shared.h"
-#include <esp_attr.h>
 
 //#include "sms_ntsc.h"
 
@@ -377,6 +376,14 @@ void render_reset(void)
 }
 
 static int prev_line = -1;
+static int skip_render = 0;
+static int interlace_field = -1;
+
+void render_mode(int skip, int field)
+{
+    skip_render = skip;
+    interlace_field = field;
+}
 
 /* Draw a line of the display */
 IRAM_ATTR void render_line(int line)
@@ -492,10 +499,13 @@ IRAM_ATTR void render_line(int line)
     if (!overscan)
       vline -= top_border;
 
+    if (!skip_render &&
+        (interlace_field < 0 || ((vline % 2) ^ interlace_field))) {
     //if (option.ntsc)
     //  sms_ntsc_blit(&sms_ntsc, ( SMS_NTSC_IN_T const * )pixel, internal_buffer, bitmap.viewport.w + 2*bitmap.viewport.x, vline);
     //else
       remap_8_to_16(vline);
+    }
   }
 }
 
@@ -835,7 +845,7 @@ void palette_sync(int index)
   }
 
   uint16 color = MAKE_PIXEL(r, g, b);
-  pixel[index] = color; //(color >> 8) | (color << 8);
+  pixel[index] = (color >> 8) | (color << 8);
 }
 
 

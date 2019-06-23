@@ -443,11 +443,11 @@ static int state_save(char* fn, FILE *file)
    if (SNSS_OK != status)
       goto _error;
 
-   printf("State %d saved", state_slot);
+   printf("State %d saved\n", state_slot);
    return 0;
 
 _error:
-   printf("error: %s", SNSS_GetErrorString(status));
+   printf("error: %s\n", SNSS_GetErrorString(status));
    SNSS_CloseFile(&snssFile);
    abort();
 }
@@ -549,13 +549,12 @@ _error:
 void save_sram()
 {
     odroid_display_lock();
-    odroid_display_drain_spi();
 
     char* romPath = odroid_settings_RomFilePath_get();
     if (romPath)
     {
         esp_err_t r = odroid_sdcard_open(SD_BASE_PATH);
-		if (r != ESP_OK)
+        if (r != ESP_OK)
         {
             odroid_display_show_sderr(ODROID_SD_ERR_NOCARD);
             abort();
@@ -574,7 +573,7 @@ void save_sram()
         free(romPath);
 
         r = odroid_sdcard_close();
-		if (r != ESP_OK)
+        if (r != ESP_OK)
         {
             odroid_display_show_sderr(ODROID_SD_ERR_NOCARD);
             abort();
@@ -587,13 +586,12 @@ void save_sram()
 void load_sram()
 {
     odroid_display_lock();
-    odroid_display_drain_spi();
 
     char* romName = odroid_settings_RomFilePath_get();
     if (romName)
     {
         esp_err_t r = odroid_sdcard_open(SD_BASE_PATH);
-		if (r != ESP_OK)
+        if (r != ESP_OK)
         {
             odroid_display_show_sderr(ODROID_SD_ERR_NOCARD);
             abort();
@@ -612,7 +610,7 @@ void load_sram()
         free(romName);
 
         r = odroid_sdcard_close();
-		if (r != ESP_OK)
+        if (r != ESP_OK)
         {
             odroid_display_show_sderr(ODROID_SD_ERR_NOCARD);
             abort();

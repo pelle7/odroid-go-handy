@@ -23,6 +23,8 @@
 ** $Id: nes.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
+#pragma GCC optimize ("O3")
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -40,6 +42,7 @@
 #include <nofrendo.h>
 #include "nesstate.h"
 
+#include <esp_attr.h>
 #include "esp_system.h"
 #include "../../odroid/odroid_input.h"
 
@@ -54,7 +57,23 @@
 
 #define  NES_SKIP_LIMIT       (NES_REFRESH_RATE / 5)   /* 12 or 10, depending on PAL/NTSC */
 
-extern odroid_battery_state battery;
+
+#define FRAME_CHECK 10
+#if 1
+#define INTERLACE_ON_THRESHOLD 8
+#define INTERLACE_OFF_THRESHOLD 10
+#elif 0
+// All interlaced updates
+#define INTERLACE_ON_THRESHOLD (FRAME_CHECK+1)
+#define INTERLACE_OFF_THRESHOLD (FRAME_CHECK+1)
+#else
+// All progressive updates
+#define INTERLACE_ON_THRESHOLD 0
+#define INTERLACE_OFF_THRESHOLD 0
+#endif
+
+odroid_battery_state battery;
+static short interlace = -1;
 
 static nes_t nes;
 
@@ -92,12 +111,12 @@ void nes_setcontext(nes_t *machine)
    nes = *machine;
 }
 
-static uint8 ram_read(uint32 address)
+static uint8 IRAM_ATTR ram_read(uint32 address)
 {
    return nes.cpu->mem_page[0][address & (NES_RAMSIZE - 1)];
 }
 
-static void ram_write(uint32 address, uint8 value)
+static void IRAM_ATTR ram_write(uint32 address, uint8 value)
 {
    nes.cpu->mem_page[0][address & (NES_RAMSIZE - 1)] = value;
 }
@@ -253,7 +272,7 @@ static void build_address_handlers(nes_t *machine)
 }
 
 /* raise an IRQ */
-void nes_irq(void)
+void IRAM_ATTR nes_irq(void)
 {
 #ifdef NOFRENDO_DEBUG
    if (nes.scanline <= NES_SCREEN_HEIGHT)
@@ -280,7 +299,7 @@ void nes_setfiq(uint8 value)
    nes.fiq_cycles = (int) NES_FIQ_PERIOD;
 }
 
-static void nes_checkfiq(int cycles)
+INLINE void nes_checkfiq(int cycles)
 {
    nes.fiq_cycles -= cycles;
    if (nes.fiq_cycles <= 0)
@@ -294,7 +313,7 @@ static void nes_checkfiq(int cycles)
    }
 }
 
-void nes_nmi(void)
+void IRAM_ATTR nes_nmi(void)
 {
    nes6502_nmi();
 }
@@ -307,7 +326,9 @@ static void nes_renderframe(bool draw_flag)
 
    while (262 != nes.scanline)
    {
-      ppu_scanline(nes.vidbuf, nes.scanline, draw_flag);
+      bool draw_scanline = draw_flag &&
+          ((interlace < 0) || ((nes.scanline % 2) ^ interlace));
+      ppu_scanline(nes.vidbuf, nes.scanline, draw_scanline);
 
       if (241 == nes.scanline)
       {
@@ -335,34 +356,37 @@ static void nes_renderframe(bool draw_flag)
       nes.scanline++;
    }
 
+   if (draw_flag && interlace >= 0) interlace = 1 - interlace;
+
    nes.scanline = 0;
 }
 
 static void system_video(bool draw)
 {
-   /* TODO: hack */
-   if (false == draw)
-   {
-      //gui_frame(false);
+   if (!draw) {
       return;
    }
 
-   /* blit the NES screen to our video surface */
-   vid_blit(nes.vidbuf, 0, (NES_SCREEN_HEIGHT - NES_VISIBLE_HEIGHT) / 2,
-            0, 0, NES_SCREEN_WIDTH, NES_VISIBLE_HEIGHT);
+   /* Swap buffer to primary */
+   vid_swap(&nes.vidbuf);
 
    /* overlay our GUI on top of it */
    //gui_frame(true);
 
-   /* blit to screen */
-   vid_flush();
-
-   /* grab input */
-   osd_getinput();
+   /* Flush buffer to screen */
+   vid_flush(interlace);
 }
 
 extern void do_audio_frame();
 extern bool forceConsoleReset;
+
+static inline int
+get_elapsed_time(uint startTime, uint stopTime)
+{
+   return (stopTime > startTime) ?
+      stopTime - startTime :
+      ((uint64_t)stopTime + (uint64_t)0xffffffff) - startTime;
+}
 
 /* main emulation loop */
 void nes_emulate(void)
@@ -376,17 +400,19 @@ void nes_emulate(void)
    nes.scanline_cycles = 0;
    nes.fiq_cycles = (int) NES_FIQ_PERIOD;
 
-   uint startTime;
-   uint stopTime;
+   int elapsedTime;
+   uint startTime, stopTime;
    uint totalElapsedTime = 0;
    int frame = 0;
-   int skipFrame = 0;
+   int skippedFrames = 0;
+   int interlacedFrames = 0;
+   int renderedFrames = FRAME_CHECK;
 
 
    for (int i = 0; i < 4; ++i)
    {
+       osd_getinput();
        nes_renderframe(1);
-       system_video(1);
    }
 
    load_sram();
@@ -396,40 +422,69 @@ void nes_emulate(void)
         nes_reset(SOFT_RESET);
     }
 
+   const int frameTime = CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000 / NES_REFRESH_RATE;
+   bool renderFrame = true;
+
    while (false == nes.poweroff)
    {
        startTime = xthal_get_ccount();
 
-        bool renderFrame = ((skipFrame % 2) == 0);
-
+        osd_getinput();
         nes_renderframe(renderFrame);
         system_video(renderFrame);
 
-        if (skipFrame % 7 == 0) ++skipFrame;
-        ++skipFrame;
+#if 1
+        stopTime = xthal_get_ccount();
+        elapsedTime = get_elapsed_time(startTime, stopTime);
+
+        // Don't allow skipping more than one frame at a time.
+        if (renderFrame) {
+           ++renderedFrames;
+           if (interlace >= 0) {
+              ++interlacedFrames;
+           }
+
+           if (elapsedTime > frameTime) {
+              renderFrame = false;
+              ++skippedFrames;
+           }
+        } else {
+            renderFrame = true;
+        }
+#endif
 
         do_audio_frame();
 
         stopTime = xthal_get_ccount();
-
-        int elapsedTime;
-        if (stopTime > startTime)
-          elapsedTime = (stopTime - startTime);
-        else
-          elapsedTime = ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
-
+        elapsedTime = get_elapsed_time(startTime, stopTime);
         totalElapsedTime += elapsedTime;
         ++frame;
+
+        if ((frame % FRAME_CHECK) == 0) {
+           if (renderedFrames <= INTERLACE_ON_THRESHOLD && interlace == -1) {
+              interlace = 0;
+           }
+           if (renderedFrames >= INTERLACE_OFF_THRESHOLD) {
+              interlace = -1;
+           }
+           renderedFrames = 0;
+        }
 
         if (frame == 60)
         {
           float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
-          float fps = frame / seconds;
+          float fps = (60 - skippedFrames) / (frame / seconds) * 60.f;
 
-          printf("HEAP:0x%x, FPS:%f, BATTERY:%d [%d]\n", esp_get_free_heap_size(), fps, battery.millivolts, battery.percentage);
+          odroid_input_battery_level_read(&battery);
+
+          printf("HEAP:0x%x, FPS:%f, INT:%d, SKIP:%d, BATTERY:%d [%d]\n",
+                 esp_get_free_heap_size(), fps, interlacedFrames, skippedFrames,
+                 battery.millivolts, battery.percentage);
 
           frame = 0;
           totalElapsedTime = 0;
+          skippedFrames = 0;
+          interlacedFrames = 0;
         }
    }
 }

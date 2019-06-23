@@ -23,6 +23,8 @@
 ** $Id: nes_ppu.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
+#pragma GCC optimize ("O3")
+
 #include <string.h>
 #include <stdlib.h>
 #include <noftypes.h>
@@ -37,6 +39,8 @@
 #include <vid_drv.h>
 #include <nes_pal.h>
 #include <nesinput.h>
+
+#include <esp_attr.h>
 
 
 /* PPU access */
@@ -235,7 +239,7 @@ void ppu_reset(int reset_type)
 ** where the sprite 0 strike is going to occur (in terms of
 ** cpu cycles), using the relation that 3 pixels == 1 cpu cycle
 */
-static void ppu_setstrike(int x_loc)
+INLINE void ppu_setstrike(int x_loc)
 {
    if (false == ppu.strikeflag)
    {
@@ -285,7 +289,7 @@ static void ppu_oamdma(uint8 value)
 }
 
 /* TODO: this isn't the PPU! */
-void ppu_writehigh(uint32 address, uint8 value)
+void IRAM_ATTR ppu_writehigh(uint32 address, uint8 value)
 {
    switch (address)
    {
@@ -317,7 +321,7 @@ void ppu_writehigh(uint32 address, uint8 value)
 }
 
 /* TODO: this isn't the PPU! */
-uint8 ppu_readhigh(uint32 address)
+uint8 IRAM_ATTR ppu_readhigh(uint32 address)
 {
    uint8 value;
 
@@ -343,7 +347,7 @@ uint8 ppu_readhigh(uint32 address)
 }
 
 /* Read from $2000-$2007 */
-uint8 ppu_read(uint32 address)
+uint8 IRAM_ATTR ppu_read(uint32 address)
 {
    uint8 value;
 
@@ -402,7 +406,7 @@ uint8 ppu_read(uint32 address)
 }
 
 /* Write to $2000-$2007 */
-void ppu_write(uint32 address, uint8 value)
+void IRAM_ATTR ppu_write(uint32 address, uint8 value)
 {
    /* write goes into ppu latch... */
    ppu.latch = value;
@@ -693,7 +697,7 @@ INLINE int draw_oamtile(uint8 *surface, uint8 attrib, uint8 pat1,
    return strike_pixel;
 }
 
-static void ppu_renderbg(uint8 *vidbuf)
+static void IRAM_ATTR ppu_renderbg(uint8 *vidbuf)
 {
    uint8 *bmp_ptr, *data_ptr, *tile_ptr, *attrib_ptr;
    uint32 refresh_vaddr, bg_offset, attrib_base;
@@ -784,7 +788,7 @@ typedef struct obj_s
 } obj_t;
 
 /* TODO: fetch valid OAM a scanline before, like the Real Thing */
-static void ppu_renderoam(uint8 *vidbuf, int scanline)
+static void IRAM_ATTR ppu_renderoam(uint8 *vidbuf, int scanline)
 {
    uint8 *buf_ptr;
    uint32 vram_offset;
@@ -897,7 +901,7 @@ static void ppu_renderoam(uint8 *vidbuf, int scanline)
 
 /* Fake rendering a line */
 /* This is needed for sprite 0 hits when we're skipping drawing a frame */
-static void ppu_fakeoam(int scanline)
+static void IRAM_ATTR ppu_fakeoam(int scanline)
 {
    uint8 *data_ptr;
    obj_t *sprite_ptr;
@@ -1010,7 +1014,7 @@ bool ppu_enabled(void)
    return (ppu.bg_on || ppu.obj_on);
 }
 
-static void ppu_renderscanline(bitmap_t *bmp, int scanline, bool draw_flag)
+static void IRAM_ATTR ppu_renderscanline(bitmap_t *bmp, int scanline, bool draw_flag)
 {
    uint8 *buf = bmp->line[scanline];
 
@@ -1039,7 +1043,7 @@ static void ppu_renderscanline(bitmap_t *bmp, int scanline, bool draw_flag)
 }
 
 
-void ppu_endscanline(int scanline)
+void IRAM_ATTR ppu_endscanline(int scanline)
 {
    /* modify vram address at end of scanline */
    if (scanline < 240 && (ppu.bg_on || ppu.obj_on))
@@ -1073,13 +1077,13 @@ void ppu_endscanline(int scanline)
    }
 }
 
-void ppu_checknmi(void)
+void IRAM_ATTR ppu_checknmi(void)
 {
    if (ppu.ctrl0 & PPU_CTRL0F_NMI)
       nes_nmi();
 }
 
-void ppu_scanline(bitmap_t *bmp, int scanline, bool draw_flag)
+void IRAM_ATTR ppu_scanline(bitmap_t *bmp, int scanline, bool draw_flag)
 {
    if (scanline < 240)
    {
@@ -1164,7 +1168,7 @@ INLINE void draw_deadsprite(bitmap_t *bmp, int x, int y, int height)
 
 
 /* Stuff for the OAM viewer */
-static void draw_sprite(bitmap_t *bmp, int x, int y, uint8 tile_num, uint8 attrib)
+static void IRAM_ATTR draw_sprite(bitmap_t *bmp, int x, int y, uint8 tile_num, uint8 attrib)
 {
    int line, height;
    int col_high, vram_adr;

@@ -28,6 +28,7 @@
 #include <string.h>
 #include <noftypes.h>
 #include <bitmap.h>
+#include <nes.h>
 
 void bmp_clear(const bitmap_t *bitmap, uint8 color)
 {
@@ -76,28 +77,38 @@ static bitmap_t *_make_bitmap(uint8 *data_addr, bool hw, int width,
 }
 
 /* Allocate and initialize a bitmap structure */
-#define FRAME_BUFFER_LENGTH ((256 + (2 * 8)) * 240)
-uint8 frameBuffer[FRAME_BUFFER_LENGTH];
+#define FRAME_BUFFER_LENGTH (((NES_SCREEN_WIDTH + (2 * 8)) * NES_SCREEN_HEIGHT))
+int framesUsed = 0;
+uint8 frameBuffer1[FRAME_BUFFER_LENGTH];
+uint8 frameBuffer2[FRAME_BUFFER_LENGTH];
 bitmap_t *bmp_create(int width, int height, int overdraw)
 {
     printf("bmp_create: width=%d, height=%d, overdraw=%d\n", width, height, overdraw);
 
    uint8 *addr;
-   int pitch;
 
-   pitch = width + (overdraw * 2); /* left and right */
-   //addr = malloc((pitch * height) + 3); /* add max 32-bit aligned adjustment */
-   //if (NULL == addr)
-    //  return NULL;
+   int size = (width + (overdraw * 2)) * height;
+   if (size > FRAME_BUFFER_LENGTH)
+   {
+      printf("bmp_create called with too-large size\n");
+      abort();
+   }
 
-    if (pitch * height > FRAME_BUFFER_LENGTH)
-    {
-        abort();
-    }
 
-    addr = frameBuffer;
+   switch(framesUsed) {
+   case 0:
+      addr = frameBuffer1;
+      break;
+   case 1:
+      addr = frameBuffer2;
+      break;
+   default:
+      printf("Run out of framebuffer memory to hand out\n");
+      abort();
+   }
+   ++framesUsed;
 
-   return _make_bitmap(addr, false, width, height, width, overdraw);
+   return _make_bitmap(addr, true, width, height, width, overdraw);
 }
 
 /* allocate and initialize a hardware bitmap */
