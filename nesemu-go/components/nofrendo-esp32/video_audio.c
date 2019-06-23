@@ -427,15 +427,7 @@ static int ConvertJoystickInput()
     }
 
     // Note: this will cause an exception on 2nd Core in Debug mode
-    if (powerFrameCount > /*60*/ 30 * 2)
-    {
-        // Turn Blue LED on. Power state change turns it off
-        gpio_set_level(GPIO_NUM_2, 1);
-
-        PowerDown();
-    }
-
-    if (!ignoreMenuButton && previousJoystickState.values[ODROID_INPUT_MENU] && !state.values[ODROID_INPUT_MENU])
+    if (powerFrameCount > /*60*/ 30 * 1)
     {
         odroid_audio_terminate();
 
@@ -461,6 +453,26 @@ static int ConvertJoystickInput()
         esp_restart();
     }
 
+    if (!ignoreMenuButton && previousJoystickState.values[ODROID_INPUT_MENU] && !state.values[ODROID_INPUT_MENU])
+    {
+        odroid_audio_terminate();
+
+        printf("Stopping video queue.\n");
+
+        void* arg = 1;
+        xQueueSend(vidQueue, &arg, portMAX_DELAY);
+        while(exitVideoTaskFlag)
+        {
+             vTaskDelay(10);
+        }
+
+        // Set menu application
+        odroid_system_application_set(0);
+
+
+        // Reset
+        esp_restart();
+    }
 
     // Scaling
     if (state.values[ODROID_INPUT_START] && !previousJoystickState.values[ODROID_INPUT_RIGHT] && state.values[ODROID_INPUT_RIGHT])
