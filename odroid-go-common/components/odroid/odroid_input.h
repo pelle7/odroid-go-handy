@@ -49,3 +49,6 @@ void odroid_input_battery_level_init();
 void odroid_input_battery_level_read(odroid_battery_state* out_state);
 void odroid_input_battery_level_force_voltage(float volts);
 void odroid_input_battery_monitor_enabled_set(int value);
+
+int32_t odroid_Backlight_get();
+void odroid_Backlight_set(int32_t value);
