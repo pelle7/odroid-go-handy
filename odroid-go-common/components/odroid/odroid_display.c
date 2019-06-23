@@ -36,15 +36,26 @@ static spi_transaction_t trans[SPI_TRANSACTION_COUNT];
 static spi_device_handle_t spi;
 
 
+#define SCREEN_WIDTH 320
+#define SCREEN_HEIGHT 240
+
 #define LINE_BUFFERS (2)
 #define LINE_COUNT (5)
+#define LINE_BUFFER_SIZE (SCREEN_WIDTH*LINE_COUNT)
 uint16_t* line[LINE_BUFFERS];
 QueueHandle_t spi_queue;
 QueueHandle_t line_buffer_queue;
-SemaphoreHandle_t line_semaphore;
-SemaphoreHandle_t spi_empty;
 SemaphoreHandle_t spi_count_semaphore;
+spi_transaction_t global_transaction;
+bool use_polling = false;
 
+// The number of pixels that need to be updated to use interrupt-based updates
+// instead of polling.
+#define POLLING_PIXEL_THRESHOLD (LINE_BUFFER_SIZE)
+
+// At a certain point, it's quicker to just do a single transfer for the whole
+// screen than try to break it down into partial updates
+#define PARTIAL_UPDATE_THRESHOLD (160*144)
 
 bool isBackLightIntialized = false;
 
@@ -54,19 +65,7 @@ bool isBackLightIntialized = false;
 #define GAMEBOY_HEIGHT (144)
 
 
-// SMS
-#define SMS_WIDTH (256)
-#define SMS_HEIGHT (192)
 
-#define GAMEGEAR_WIDTH (160)
-#define GAMEGEAR_HEIGHT (144)
-
-#define PIXEL_MASK          (0x1F)
-
-
-// NES
-#define NES_GAME_WIDTH (256)
-#define NES_GAME_HEIGHT (224) /* NES_VISIBLE_HEIGHT */
 
 // Lynx
 #define LYNX_GAME_WIDTH (160)
@@ -119,7 +118,7 @@ DRAM_ATTR static const ili_init_cmd_t ili_init_cmds[] = {
     //{0x36, {(MADCTL_MV | MADCTL_MX | TFT_RGB_BGR)}, 1},    // Memory Access Control
     {0x36, {(MADCTL_MV | MADCTL_MY | TFT_RGB_BGR)}, 1},    // Memory Access Control
     {0x3A, {0x55}, 1},
-    {0xB1, {0x00, 0x1B}, 2},  // Frame Rate Control (1B=70, 1F=61, 10=119)
+    {0xB1, {0x00, 0x10}, 2},  // Frame Rate Control (1B=70, 1F=61, 10=119)
     {0xB6, {0x0A, 0xA2}, 2},    // Display Function Control
     {0xF6, {0x01, 0x30}, 2},
     {0xF2, {0x00}, 1},    // 3Gamma Function Disable
@@ -147,9 +146,13 @@ DRAM_ATTR static const ili_init_cmd_t ili_init_cmds[] = {
     {0, {0}, 0xff}
 };
 
-static uint16_t* line_buffer_get()
+static inline uint16_t* line_buffer_get()
 {
     uint16_t* buffer;
+    if (use_polling) {
+        return line[0];
+    }
+
     if (xQueueReceive(line_buffer_queue, &buffer, 1000 / portTICK_RATE_MS) != pdTRUE)
     {
         abort();
@@ -158,7 +161,7 @@ static uint16_t* line_buffer_get()
     return buffer;
 }
 
-void line_buffer_put(uint16_t* buffer)
+static inline void line_buffer_put(uint16_t* buffer)
 {
     if (xQueueSend(line_buffer_queue, &buffer, 1000 / portTICK_RATE_MS) != pdTRUE)
     {
@@ -184,18 +187,12 @@ static void spi_task(void *arg)
             int dc = (int)t->user & 0x80;
             if(dc)
             {
-                xSemaphoreGive(line_semaphore);
                 line_buffer_put(t->tx_buffer);
             }
 
             if(xQueueSend(spi_queue, &t, portMAX_DELAY) != pdPASS)
             {
                 abort();
-            }
-
-            if(uxQueueMessagesWaiting(spi_queue) >= SPI_TRANSACTION_COUNT)
-            {
-                xSemaphoreGive(spi_empty);
             }
         }
         else
@@ -219,17 +216,6 @@ static void spi_initialize()
     line_buffer_queue = xQueueCreate(LINE_BUFFERS, sizeof(void*));
     if(!line_buffer_queue) abort();
 
-
-    line_semaphore = xSemaphoreCreateCounting(LINE_BUFFERS, LINE_BUFFERS);
-    if (!line_semaphore) abort();
-
-
-    spi_empty = xSemaphoreCreateBinary();
-    if(!spi_empty) abort();
-
-    xSemaphoreGive(spi_empty);
-
-
     spi_count_semaphore = xSemaphoreCreateCounting(SPI_TRANSACTION_COUNT, 0);
     if (!spi_count_semaphore) abort();
 
@@ -238,17 +224,22 @@ static void spi_initialize()
 
 
 
-static spi_transaction_t* spi_get_transaction()
+static inline spi_transaction_t* spi_get_transaction()
 {
     spi_transaction_t* t;
-    xQueueReceive(spi_queue, &t, portMAX_DELAY);
+
+    if (use_polling) {
+        t = &global_transaction;
+    } else {
+        xQueueReceive(spi_queue, &t, portMAX_DELAY);
+    }
 
     memset(t, 0, sizeof(*t));
 
     return t;
 }
 
-static void spi_put_transaction(spi_transaction_t* t)
+static inline void spi_put_transaction(spi_transaction_t* t)
 {
     t->rx_buffer = NULL;
     t->rxlength = t->length;
@@ -258,18 +249,14 @@ static void spi_put_transaction(spi_transaction_t* t)
         t->flags |= SPI_TRANS_USE_RXDATA;
     }
 
-    if (uxSemaphoreGetCount(spi_empty) > 0)
-    {
-        if(xSemaphoreTake(spi_empty, portMAX_DELAY) != pdTRUE)
-        {
-            abort();
-        }
+    if (use_polling) {
+        spi_device_polling_transmit(spi, t);
+    } else {
+        esp_err_t ret = spi_device_queue_trans(spi, t, portMAX_DELAY);
+        assert(ret==ESP_OK);
+
+        xSemaphoreGive(spi_count_semaphore);
     }
-
-    esp_err_t ret = spi_device_queue_trans(spi, t, portMAX_DELAY);
-    assert(ret==ESP_OK);
-
-    xSemaphoreGive(spi_count_semaphore);
 }
 
 
@@ -299,16 +286,16 @@ static void ili_data(const uint8_t *data, int len)
             {
                 t->tx_data[i] = data[i];
             }
-            t->length = len * 8;                 //Len is in bytes, transaction length is in bits.
+            t->length = len * 8;               //Len is in bytes, transaction length is in bits.
             t->user = (void*)1;                //D/C needs to be set to 1
             t->flags = SPI_TRANS_USE_TXDATA;
         }
         else
         {
-            t->length = len * 8;                 //Len is in bytes, transaction length is in bits.
+            t->length = len * 8;               //Len is in bytes, transaction length is in bits.
             t->tx_buffer = data;               //Data
             t->user = (void*)1;                //D/C needs to be set to 1
-            t->flags = 0; //SPI_TRANS_USE_TXDATA;
+            t->flags = 0;
         }
 
         spi_put_transaction(t);
@@ -349,56 +336,55 @@ static void ili_init()
     }
 }
 
+static inline void send_reset_column(int left, int right, int len)
+{
+    ili_cmd(0x2A);
+    const uint8_t data[] = { (left) >> 8, (left) & 0xff, right >> 8, right & 0xff };
+    ili_data(data, len);
+}
+
+static inline void send_reset_page(int top, int bottom, int len)
+{
+    ili_cmd(0x2B);
+    const uint8_t data[] = { top >> 8, top & 0xff, bottom >> 8, bottom & 0xff };
+    ili_data(data, len);
+}
 
 void send_reset_drawing(int left, int top, int width, int height)
 {
-    ili_cmd(0x2A);
+    static int last_left = -1;
+    static int last_right = -1;
+    static int last_top = -1;
+    static int last_bottom = -1;
 
-    const uint8_t data1[] = { (left) >> 8, (left) & 0xff, (left + width - 1) >> 8, (left + width - 1) & 0xff };
-    ili_data(data1, 4);
+    int right = left + width - 1;
+    if (height == 1) {
+        if (last_right > right) right = last_right;
+        else right = SCREEN_WIDTH - 1;
+    }
+    if (left != last_left || right != last_right) {
+        send_reset_column(left, right, (right != last_right) ?  4 : 2);
+        last_left = left;
+        last_right = right;
+    }
 
-    ili_cmd(0x2B);          //Page address set
-
-    const uint8_t data2[] = { top >> 8, top & 0xff, (top + height - 1) >> 8, (top + height - 1) & 0xff };
-    ili_data(data2, 4);
+    //int bottom = (top + height - 1);
+    int bottom = SCREEN_HEIGHT - 1;
+    if (top != last_top || bottom != last_bottom) {
+        send_reset_page(top, bottom, (bottom != last_bottom) ? 4 : 2);
+        last_top = top;
+        last_bottom = bottom;
+    }
 
     ili_cmd(0x2C);           //memory write
-}
-
-// static void wait_for_line_buffer()
-// {
-//     // if(xSemaphoreTake(line_semaphore, 1000 / portTICK_RATE_MS) != pdTRUE )
-//     // {
-//     //     abort();
-//     // }
-// }
-
-void send_continue_wait()
-{
-    if(xSemaphoreTake(spi_empty, 1000 / portTICK_RATE_MS) != pdTRUE )
-    {
-        abort();
+    if (height > 1) {
+        ili_cmd(0x3C);           //memory write continue
     }
 }
 
 void send_continue_line(uint16_t *line, int width, int lineCount)
 {
-    spi_transaction_t* t;
-
-
-    t = spi_get_transaction();
-
-
-    t->tx_data[0] = 0x3C;   //memory write continue
-    t->length = 8;
-    t->user = (void*)0;
-    t->flags = SPI_TRANS_USE_TXDATA;
-
-    spi_put_transaction(t);
-
-
-    t = spi_get_transaction();
-
+    spi_transaction_t* t = spi_get_transaction();
     t->length = width * 2 * lineCount * 8;
     t->tx_buffer = line;
     t->user = (void*)0x81;
@@ -515,7 +501,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
 {
     short x, y;
 
-    odroid_display_lock_gb_display();
+    odroid_display_lock();
 
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
 
@@ -654,9 +640,7 @@ void ili9341_write_frame_gb(uint16_t* buffer, int scale)
         }
     }
 
-    send_continue_wait();
-
-    odroid_display_unlock_gb_display();
+    odroid_display_unlock();
 }
 
 void ili9341_init()
@@ -810,393 +794,256 @@ void ili9341_prepare()
 #endif
 }
 
-//
-void ili9341_write_frame_sms(uint8_t* buffer, uint16_t color[], uint8_t isGameGear, uint8_t scale)
+void ili9341_blank_screen()
 {
-    short x, y;
+    odroid_display_lock();
 
-    odroid_display_lock_sms_display();
-
-    if (buffer == NULL)
+    // clear the buffer
+    for (int i = 0; i < LINE_BUFFERS; ++i)
     {
-        // clear the buffer
-        for (int i = 0; i < LINE_BUFFERS; ++i)
-        {
-            memset(line[i], 0, 320 * sizeof(uint16_t) * LINE_COUNT);
-        }
-
-        // clear the screen
-        send_reset_drawing(0, 0, 320, 240);
-
-        for (y = 0; y < 240; y += LINE_COUNT)
-        {
-            uint16_t* line_buffer = line_buffer_get();
-            send_continue_line(line_buffer, 320, LINE_COUNT);
-        }
-    }
-    else
-    {
-        uint8_t* framePtr = buffer;
-
-
-        if (!isGameGear)
-        {
-            if (scale)
-            {
-                // const short xOffset = 4;
-                // const uint16_t displayWidth = 320 - (xOffset / 4 * 5);
-                // const short centerX = (320 - displayWidth) >> 1;
-
-                //send_reset_drawing(centerX, 0, displayWidth, 240);
-
-                const uint16_t displayWidth = 320;
-                send_reset_drawing(0, 0, 320, 240);
-
-                for (y = 0; y < SMS_HEIGHT; y += 4)
-                {
-                  int linesWritten = 0;
-                  uint16_t* line_buffer = line_buffer_get();
-
-                  for (short i = 0; i < 4; ++i)
-                  {
-                      if((y + i) >= SMS_HEIGHT)
-                        break;
-
-                      int index = (i) * displayWidth;
-                      if (i > 1) index += displayWidth; // skip a line for blending
-
-                      //int bufferIndex = ((y + i) * SMS_WIDTH) + xOffset;
-                      int bufferIndex = ((y + i) * SMS_WIDTH);
-
-                      uint16_t samples[4];
-
-                      //for (x = 0; x < SMS_WIDTH - (xOffset * 2); x += 4)
-                      for (x = 0; x < SMS_WIDTH; x += 4)
-                      {
-                        for (short j = 0; j < 4; ++j)
-                        {
-                            uint8_t val = framePtr[bufferIndex++] & PIXEL_MASK;
-                            //
-                            // uint8_t r = color[val][0];
-                            // uint8_t g = color[val][1];
-                            // uint8_t b = color[val][2];
-                            //
-                            // samples[j] = (((r << 8) & 0xF800) | ((g << 3) & 0x07E0) | ((b >> 3) & 0x001F));
-
-                            samples[j] = color[val];
-                        }
-
-                        uint16_t mid1 = Blend(samples[1], samples[2]);
-
-                        line_buffer[index++] = ((samples[0] >> 8) | (samples[0] << 8));
-                        line_buffer[index++] = ((samples[1] >> 8) | (samples[1] << 8));
-                        line_buffer[index++] = ((mid1 >> 8) | (mid1 << 8));
-                        line_buffer[index++] = ((samples[2] >> 8) | (samples[2] << 8));
-                        line_buffer[index++] = ((samples[3] >> 8) | (samples[3] << 8));
-                      }
-
-                      ++linesWritten;
-                  }
-
-                  // blend horizontal
-                  short srcIndex1 = displayWidth * 1;
-                  short srcIndex2 = displayWidth * 3;
-                  short dstIndex = displayWidth * 2;
-
-                  for (short i = 0; i < displayWidth; ++i)
-                  {
-                      uint16_t sample1 = line_buffer[srcIndex1++];
-                      sample1 = ((sample1 >> 8) | (sample1 << 8));
-
-                      uint16_t sample2 = line_buffer[srcIndex2++];
-                      sample2 = ((sample2 >> 8) | (sample2 << 8));
-
-                      uint16_t mid1 = Blend(sample1, sample2);
-
-                      line_buffer[dstIndex++] = ((mid1 >> 8) | (mid1 << 8));
-                  }
-
-                  ++linesWritten;
-
-                  // display
-                  send_continue_line(line_buffer, displayWidth, linesWritten);
-                }
-            }
-            else
-            {
-                send_reset_drawing((320 / 2) - (SMS_WIDTH / 2),
-                    (240 / 2) - (SMS_HEIGHT / 2),
-                    SMS_WIDTH,
-                    SMS_HEIGHT);
-
-                for (y = 0; y < SMS_HEIGHT; y += LINE_COUNT)
-                {
-                  int linesWritten = 0;
-                  uint16_t* line_buffer = line_buffer_get();
-
-                  for (short i = 0; i < LINE_COUNT; ++i)
-                  {
-                      if((y + i) >= SMS_HEIGHT)
-                        break;
-
-                      int index = (i) * SMS_WIDTH;
-                      int bufferIndex = ((y + i) * SMS_WIDTH);
-
-                      for (x = 0; x < SMS_WIDTH; ++x)
-                      {
-                        // uint8_t val = framePtr[bufferIndex++] & PIXEL_MASK;
-                        //
-                        // uint8_t r = color[val][0];
-                        // uint8_t g = color[val][1];
-                        // uint8_t b = color[val][2];
-                        //
-                        // uint16_t sample = (((r << 8) & 0xF800) | ((g << 3) & 0x07E0) | ((b >> 3) & 0x001F));
-
-                        uint16_t sample = color[framePtr[bufferIndex++] & PIXEL_MASK];
-                        line_buffer[index++] = ((sample >> 8) | (sample << 8));
-                      }
-
-                      ++linesWritten;
-                  }
-
-                  // display
-                  send_continue_line(line_buffer, SMS_WIDTH, linesWritten);
-                }
-            }
-        }
-        else
-        {
-            // game Gear
-            //framePtr += (24 * 256);
-
-            if (scale)
-            {
-                const short outputWidth = 320;
-                const short outputHeight = 240;
-
-                send_reset_drawing(0, 0, outputWidth, outputHeight);
-
-                for (y = 0; y < 144; y += 3)
-                {
-                    uint16_t* line_buffer = line_buffer_get();
-
-                    for (short i = 0; i < 3; ++i)
-                    {
-                        // skip middle vertical line
-                        int index = i * outputWidth * 2;
-                        int bufferIndex = ((y + i) * 256) + 48;
-
-                        for (x = 0; x < GAMEGEAR_WIDTH; ++x)
-                        {
-                            uint8_t val = framePtr[bufferIndex++] & PIXEL_MASK;
-
-                            // uint8_t r = color[val][0];
-                            // uint8_t g = color[val][1];
-                            // uint8_t b = color[val][2];
-                            //
-                            // uint16_t sample = (((r << 8) & 0xF800) | ((g << 3) & 0x07E0) | ((b >> 3) & 0x001F));
-
-                            uint16_t sample = color[val];
-                            sample = (sample >> 8) | (sample << 8);
-
-                            line_buffer[index++] = sample;
-                            line_buffer[index++] = sample;
-                        }
-                    }
-
-                    // Blend top and bottom lines into middle
-                    short sourceA = 0;
-                    short sourceB = outputWidth * 2;
-                    short sourceC = sourceB + (outputWidth * 2);
-
-                    short output1 = outputWidth;
-                    short output2 = output1 + (outputWidth * 2);
-
-                    for (short j = 0; j < outputWidth; ++j)
-                    {
-                      uint16_t a = line_buffer[sourceA++];
-                      a = ((a >> 8) | ((a) << 8));
-
-                      uint16_t b = line_buffer[sourceB++];
-                      b = ((b >> 8) | ((b) << 8));
-
-                      uint16_t c = line_buffer[sourceC++];
-                      c = ((c >> 8) | ((c) << 8));
-
-                      uint16_t mid = Blend(a, b);
-                      mid = ((mid >> 8) | ((mid) << 8));
-
-                      line_buffer[output1++] = mid;
-
-                      uint16_t mid2 = Blend(b, c);
-                      mid2 = ((mid2 >> 8) | ((mid2) << 8));
-
-                      line_buffer[output2++] = mid2;
-                    }
-
-                    // send the data
-                    send_continue_line(line_buffer, outputWidth, 5);
-                }
-            }
-            else
-            {
-                send_reset_drawing((320 / 2) - (GAMEGEAR_WIDTH / 2),
-                    (240 / 2) - (GAMEGEAR_HEIGHT / 2),
-                    GAMEGEAR_WIDTH,
-                    GAMEGEAR_HEIGHT);
-
-                for (y = 0; y < GAMEGEAR_HEIGHT; y += LINE_COUNT)
-                {
-                  int linesWritten = 0;
-                  uint16_t* line_buffer = line_buffer_get();
-
-                  for (short i = 0; i < LINE_COUNT; ++i)
-                  {
-                      if((y + i) >= GAMEGEAR_HEIGHT)
-                        break;
-
-                      int index = (i) * GAMEGEAR_WIDTH;
-                      int bufferIndex = ((y + i) * 256) + 48;
-
-                      for (x = 0; x < GAMEGEAR_WIDTH; ++x)
-                      {
-                        uint8_t val = framePtr[bufferIndex++] & PIXEL_MASK;
-
-                        // uint8_t r = color[val][0];
-                        // uint8_t g = color[val][1];
-                        // uint8_t b = color[val][2];
-                        //
-                        // uint16_t sample = (((r << 8) & 0xF800) | ((g << 3) & 0x07E0) | ((b >> 3) & 0x001F));
-
-                        uint16_t sample = color[val];
-                        line_buffer[index++] = ((sample >> 8) | (sample << 8));
-                      }
-
-                      ++linesWritten;
-                  }
-
-                  // display
-                  send_continue_line(line_buffer, GAMEGEAR_WIDTH, linesWritten);
-                }
-            }
-        }
+        memset(line[i], 0, SCREEN_WIDTH * sizeof(uint16_t) * LINE_COUNT);
     }
 
-    send_continue_wait();
-    odroid_display_unlock_sms_display();
+    // clear the screen
+    send_reset_drawing(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    for (int y = 0; y < SCREEN_HEIGHT; y += LINE_COUNT)
+    {
+        uint16_t* line_buffer = line_buffer_get();
+        send_continue_line(line_buffer, SCREEN_WIDTH, LINE_COUNT);
+    }
+
+    odroid_display_unlock();
 }
 
-//
-
-void ili9341_write_frame_nes(uint8_t* buffer, uint16_t* myPalette, uint8_t scale)
+static void
+write_rect(uint8_t *buffer, uint16_t *palette,
+           int origin_x, int origin_y,
+           int left, int top, int width, int height,
+           int bufferIndex, int stride, uint8_t pixel_mask,
+           int x_inc, int y_inc)
 {
-    short x, y;
+    int actual_left, actual_width, actual_top, actual_height, ix_acc, iy_acc;
 
-    odroid_display_lock_nes_display();
+#if 1
+    actual_left = ((SCREEN_WIDTH * left) + (x_inc - 1)) / x_inc;
+    actual_top = ((SCREEN_HEIGHT * top) + (y_inc - 1)) / y_inc;
+    int actual_right = ((SCREEN_WIDTH * (left + width)) + (x_inc - 1)) / x_inc;
+    int actual_bottom = ((SCREEN_HEIGHT * (top + height)) + (y_inc - 1)) / y_inc;
+    actual_width = actual_right - actual_left;
+    actual_height = actual_bottom - actual_top;
+    ix_acc = (x_inc * actual_left) % SCREEN_WIDTH;
+    iy_acc = (y_inc * actual_top) % SCREEN_HEIGHT;
+#else
+    // Leaving these here for reference, the above equations should produce
+    // equivalent results.
+    actual_left = actual_width = ix_acc = 0;
+    for (int x = 0, x_acc = 0, ax = 0; x < left + width; ++ax) {
+        x_acc += x_inc;
+        while (x_acc >= SCREEN_WIDTH) {
+            x_acc -= SCREEN_WIDTH;
+            ++x;
 
-    //xTaskToNotify = xTaskGetCurrentTaskHandle();
-
-    if (buffer == NULL)
-    {
-        // clear the buffer
-        for (int i = 0; i < LINE_BUFFERS; ++i)
-        {
-            memset(line[i], 0, 320 * sizeof(uint16_t) * LINE_COUNT);
-        }
-
-        // clear the screen
-        send_reset_drawing(0, 0, 320, 240);
-
-        for (y = 0; y < 240; y += LINE_COUNT)
-        {
-            uint16_t* line_buffer = line_buffer_get();
-            send_continue_line(line_buffer, 320, LINE_COUNT);
-        }
-    }
-    else
-    {
-        uint8_t* framePtr = buffer;
-
-        if (scale)
-        {
-            const uint16_t displayWidth = 320 - 10;
-            const uint16_t top = (240 - NES_GAME_HEIGHT) / 2;
-
-            send_reset_drawing((320 / 2) - (displayWidth / 2), top, displayWidth, NES_GAME_HEIGHT);
-
-            for (y = 0; y < NES_GAME_HEIGHT; y += LINE_COUNT)
-            {
-              int linesWritten = 0;
-              uint16_t* line_buffer = line_buffer_get();
-
-              for (short i = 0; i < LINE_COUNT; ++i)
-              {
-                  if((y + i) >= NES_GAME_HEIGHT)
-                    break;
-
-                  int index = (i) * displayWidth;
-
-                  int bufferIndex = ((y + i) * NES_GAME_WIDTH) + 4;
-
-                  uint16_t samples[4];
-                  for (x = 4; x < NES_GAME_WIDTH - 4; x += 4)
-                  {
-                    for (short j = 0; j < 4; ++j)
-                    {
-                        uint8_t val = framePtr[bufferIndex++];
-                        samples[j] = myPalette[val];
-                    }
-
-                    uint16_t mid = Blend(samples[1] >> 8 | samples[1] << 8, samples[2] >> 8 | samples[2] << 8);
-
-                    line_buffer[index++] = samples[0];
-                    line_buffer[index++] = samples[1];
-                    line_buffer[index++] = mid >> 8 | mid << 8;
-                    line_buffer[index++] = samples[2];
-                    line_buffer[index++] = samples[3];
-                  }
-
-                  ++linesWritten;
-              }
-
-              // display
-              send_continue_line(line_buffer, displayWidth, linesWritten);
+            if (x == left) {
+                ix_acc = x_acc;
+                actual_left = ax + 1;
             }
-        }
-        else
-        {
-            send_reset_drawing((320 / 2) - (NES_GAME_WIDTH / 2), (240 / 2) - (NES_GAME_HEIGHT / 2), NES_GAME_WIDTH, NES_GAME_HEIGHT);
-
-            for (y = 0; y < NES_GAME_HEIGHT; y += LINE_COUNT)
-            {
-              int linesWritten = 0;
-              uint16_t* line_buffer = line_buffer_get();
-
-              for (short i = 0; i < LINE_COUNT; ++i)
-              {
-                  if((y + i) >= NES_GAME_HEIGHT)
-                    break;
-
-                  int index = (i) * NES_GAME_WIDTH;
-                  int bufferIndex = ((y + i) * NES_GAME_WIDTH);
-
-                  for (x = 0; x < NES_GAME_WIDTH; ++x)
-                  {
-                    line_buffer[index++] = myPalette[framePtr[bufferIndex++]];
-                  }
-
-                  ++linesWritten;
-              }
-
-              // display
-              send_continue_line(line_buffer, NES_GAME_WIDTH, linesWritten);
+            if (x == left + width) {
+                actual_width = (ax - actual_left) + 1;
             }
         }
     }
 
-    send_continue_wait();
+    actual_top = actual_height = iy_acc = 0;
+    for (int y = 0, y_acc = 0, ay = 0; y < top + height; ++ay) {
+        y_acc += y_inc;
+        while (y_acc >= SCREEN_HEIGHT) {
+            y_acc -= SCREEN_HEIGHT;
+            ++y;
 
-    odroid_display_unlock_nes_display();
+            if (y == top) {
+                iy_acc = y_acc;
+                actual_top = ay + 1;
+            }
+            if (y == top + height) {
+                actual_height = (ay - actual_top) + 1;
+            }
+        }
+    }
+#endif
+
+    if (actual_width == 0 || actual_height == 0) {
+        return;
+    }
+
+    send_reset_drawing(origin_x + actual_left, origin_y + actual_top,
+                       actual_width, actual_height);
+
+    int line_count = LINE_BUFFER_SIZE / actual_width;
+    for (int y = 0, y_acc = iy_acc; y < height;)
+    {
+        int line_buffer_index = 0;
+        uint16_t* line_buffer = line_buffer_get();
+
+        int lines_to_copy = 0;
+        for (; (lines_to_copy < line_count) && (y < height); ++lines_to_copy)
+        {
+            for (int x = 0, x_acc = ix_acc; x < width;)
+            {
+                line_buffer[line_buffer_index++] =
+                  palette[buffer[bufferIndex + x] & pixel_mask];
+
+                x_acc += x_inc;
+                while (x_acc >= SCREEN_WIDTH) {
+                    ++x;
+                    x_acc -= SCREEN_WIDTH;
+                }
+            }
+
+            y_acc += y_inc;
+            while (y_acc >= SCREEN_HEIGHT) {
+                ++y;
+                bufferIndex += stride;
+                y_acc -= SCREEN_HEIGHT;
+            }
+        }
+
+        send_continue_line(line_buffer, actual_width, lines_to_copy);
+    }
+}
+
+static int x_inc = SCREEN_WIDTH;
+static int y_inc = SCREEN_HEIGHT;
+static int x_origin = 0;
+static int y_origin = 0;
+static float x_scale = 1.f;
+static float y_scale = 1.f;
+
+void
+odroid_display_reset_scale(int width, int height)
+{
+    x_inc = SCREEN_WIDTH;
+    y_inc = SCREEN_HEIGHT;
+    x_origin = (SCREEN_WIDTH - width) / 2;
+    y_origin = (SCREEN_HEIGHT - height) / 2;
+    x_scale = y_scale = 1.f;
+}
+
+void
+odroid_display_set_scale(int width, int height, float aspect)
+{
+    float buffer_aspect = ((width * aspect) / (float)height);
+    float screen_aspect = SCREEN_WIDTH / (float)SCREEN_HEIGHT;
+
+    if (buffer_aspect < screen_aspect) {
+        y_scale = SCREEN_HEIGHT / (float)height;
+        x_scale = y_scale * aspect;
+    } else {
+        x_scale = SCREEN_WIDTH / (float)width;
+        y_scale = x_scale / aspect;
+    }
+
+    x_inc = SCREEN_WIDTH / x_scale;
+    y_inc = SCREEN_HEIGHT / y_scale;
+    x_origin = (SCREEN_WIDTH - (width * x_scale)) / 2.f;
+    y_origin = (SCREEN_HEIGHT - (height * y_scale)) / 2.f;
+
+    printf("%dx%d@%.3f x_inc:%d y_inc:%d x_scale:%.3f y_scale:%.3f x_origin:%d y_origin:%d\n",
+           width, height, aspect, x_inc, y_inc, x_scale, y_scale, x_origin, y_origin);
+}
+
+void
+ili9341_write_frame_8bit(uint8_t* buffer, odroid_scanline *diff,
+                         int width, int height, int stride,
+                         uint8_t pixel_mask, uint16_t* palette)
+{
+    if (!buffer) {
+        ili9341_blank_screen();
+        return;
+    }
+
+    odroid_display_lock();
+
+    spi_device_acquire_bus(spi, portMAX_DELAY);
+
+#if 0
+    if (diff) {
+        int n_pixels = odroid_buffer_diff_count(diff, height);
+        if (n_pixels * scale > PARTIAL_UPDATE_THRESHOLD) {
+            diff = NULL;
+        }
+    }
+#endif
+
+    bool need_interrupt_updates = false;
+    int left = 0;
+    int line_width = width;
+    int repeat = 0;
+
+#if 0
+    // Make all updates interrupt updates
+    poll_threshold = 0;
+#elif 0
+    // Make all updates polling updates
+    poll_threshold = INT_MAX;
+#endif
+
+    // Do polling updates first
+    use_polling = true;
+    for (int y = 0, i = 0; y < height; ++y, i += stride, --repeat)
+    {
+        if (repeat > 0) continue;
+
+        if (diff) {
+            left = diff[y].left;
+            line_width = diff[y].width;
+            repeat = diff[y].repeat;
+        } else {
+            repeat = height;
+        }
+
+        if (line_width > 0) {
+            int n_pixels = (line_width * x_scale) * (repeat * y_scale);
+            if (n_pixels < POLLING_PIXEL_THRESHOLD) {
+                write_rect(buffer, palette, x_origin, y_origin,
+                           left, y, line_width, repeat, i + left, stride,
+                           pixel_mask, x_inc, y_inc);
+            } else {
+                need_interrupt_updates = true;
+            }
+        }
+    }
+    use_polling = false;
+
+    // Use interrupt updates for larger areas
+    if (need_interrupt_updates) {
+        repeat = 0;
+        for (int y = 0, i = 0; y < height; ++y, i += stride, --repeat)
+        {
+            if (repeat > 0) continue;
+
+            if (diff) {
+                left = diff[y].left;
+                line_width = diff[y].width;
+                repeat = diff[y].repeat;
+            } else {
+                repeat = height;
+            }
+
+            if (line_width) {
+                int n_pixels = (line_width * x_scale) * (repeat * y_scale);
+                if (n_pixels >= POLLING_PIXEL_THRESHOLD) {
+                    write_rect(buffer, palette, x_origin, y_origin,
+                               left, y, line_width, repeat, i + left, stride,
+                               pixel_mask, x_inc, y_inc);
+                }
+            }
+        }
+    }
+
+    spi_device_release_bus(spi);
+
+    odroid_display_unlock();
 }
 
 void ili9341_write_frame_lynx(uint16_t* buffer, uint16_t* myPalette, uint8_t scale)
@@ -1390,8 +1237,6 @@ void ili9341_write_frame_rectangle(short left, short top, short width, short hei
             send_continue_line(line_buffer, width, 1);
         }
     }
-
-    send_continue_wait();
 }
 
 void ili9341_clear(uint16_t color)
@@ -1418,8 +1263,6 @@ void ili9341_clear(uint16_t color)
         uint16_t* line_buffer = line_buffer_get();
         send_continue_line(line_buffer, 320, LINE_COUNT);
     }
-
-    send_continue_wait();
 }
 
 void ili9341_write_frame_rectangleLE(short left, short top, short width, short height, uint16_t* buffer)
@@ -1465,8 +1308,6 @@ void ili9341_write_frame_rectangleLE(short left, short top, short width, short h
             send_continue_line(line_buffer, width, 1);
         }
     }
-
-    send_continue_wait();
 }
 
 void display_tasktonotify_set(int value)
@@ -1499,10 +1340,16 @@ void odroid_display_show_splash()
 
 void odroid_display_drain_spi()
 {
-    // if(xSemaphoreTake(spi_empty, 1000 / portTICK_RATE_MS) != pdTRUE )
-    // {
-    //     abort();
-    // }
+    spi_transaction_t *t[SPI_TRANSACTION_COUNT];
+    for (int i = 0; i < SPI_TRANSACTION_COUNT; ++i) {
+        xQueueReceive(spi_queue, &t[i], portMAX_DELAY);
+    }
+    for (int i = 0; i < SPI_TRANSACTION_COUNT; ++i) {
+        if (xQueueSend(spi_queue, &t[i], portMAX_DELAY) != pdPASS)
+        {
+            abort();
+        }
+    }
 }
 
 void odroid_display_show_sderr(int errNum)
@@ -1534,74 +1381,243 @@ void odroid_display_show_hourglass()
         image_hourglass_empty_black_48dp.pixel_data);
 }
 
+SemaphoreHandle_t display_mutex = NULL;
 
-SemaphoreHandle_t gb_mutex = NULL;
-
-void odroid_display_lock_gb_display()
+void odroid_display_lock()
 {
-    if (!gb_mutex)
+    if (!display_mutex)
     {
-        gb_mutex = xSemaphoreCreateMutex();
-        if (!gb_mutex) abort();
+        display_mutex = xSemaphoreCreateMutex();
+        if (!display_mutex) abort();
     }
 
-    if (xSemaphoreTake(gb_mutex, 1000 / portTICK_RATE_MS) != pdTRUE)
-    {
-        abort();
-    }
-}
-
-void odroid_display_unlock_gb_display()
-{
-    if (!gb_mutex) abort();
-
-    xSemaphoreGive(gb_mutex);
-}
-
-
-SemaphoreHandle_t nes_mutex = NULL;
-
-void odroid_display_lock_nes_display()
-{
-    if (!nes_mutex)
-    {
-        nes_mutex = xSemaphoreCreateMutex();
-        if (!nes_mutex) abort();
-    }
-
-    if (xSemaphoreTake(nes_mutex, 1000 / portTICK_RATE_MS) != pdTRUE)
+    if (xSemaphoreTake(display_mutex, 1000 / portTICK_RATE_MS) != pdTRUE)
     {
         abort();
     }
 }
 
-void odroid_display_unlock_nes_display()
+void odroid_display_unlock()
 {
-    if (!nes_mutex) abort();
+    if (!display_mutex) abort();
 
-    xSemaphoreGive(nes_mutex);
+    odroid_display_drain_spi();
+    xSemaphoreGive(display_mutex);
 }
 
-
-SemaphoreHandle_t sms_mutex = NULL;
-
-void odroid_display_lock_sms_display()
+static inline bool
+pixel_diff(uint8_t *buffer1, uint8_t *buffer2,
+           uint16_t *palette1, uint16_t *palette2,
+           uint8_t pixel_mask, uint8_t palette_shift_mask,
+           int idx)
 {
-    if (!sms_mutex)
-    {
-        sms_mutex = xSemaphoreCreateMutex();
-        if (!sms_mutex) abort();
+    uint8_t p1 = (buffer1[idx] & pixel_mask);
+    uint8_t p2 = (buffer2[idx] & pixel_mask);
+    if (!palette1)
+        return p1 != p2;
+
+    if (palette_shift_mask) {
+        if (buffer1[idx] & palette_shift_mask) p1 += (pixel_mask + 1);
+        if (buffer2[idx] & palette_shift_mask) p2 += (pixel_mask + 1);
     }
 
-    if (xSemaphoreTake(sms_mutex, 1000 / portTICK_RATE_MS) != pdTRUE)
-    {
-        abort();
+    return palette1[p1] != palette2[p2];
+}
+
+static void IRAM_ATTR
+odroid_buffer_diff_internal(uint8_t *buffer, uint8_t *old_buffer,
+                   uint16_t *palette, uint16_t *old_palette,
+                   int width, int height, int stride, uint8_t pixel_mask,
+                   uint8_t palette_shift_mask,
+                   odroid_scanline *out_diff)
+{
+    if (!old_buffer) {
+        for (int y = 0; y < height; ++y) {
+            out_diff[y].left = 0;
+            out_diff[y].width = width;
+            out_diff[y].repeat = 1;
+        }
+    } else {
+        int i = 0;
+        uint32_t pixel_mask32 = (pixel_mask << 24) | (pixel_mask << 16) |
+                                (pixel_mask <<8) | pixel_mask;
+        for (int y = 0; y < height; ++y, i += stride) {
+            out_diff[y].left = width;
+            out_diff[y].width = 0;
+            out_diff[y].repeat = 1;
+
+            if (!palette) {
+                // This is only accurate to 4 pixels of course, but much faster
+                uint32_t *buffer32 = &buffer[i];
+                uint32_t *old_buffer32 = &old_buffer[i];
+                for (int x = 0; x < width>>2; ++x) {
+                    if ((buffer32[x] & pixel_mask32) !=
+                        (old_buffer32[x] & pixel_mask32))
+                    {
+                        out_diff[y].left = x << 2;
+                        for (x = (width-1)>>2; x >= 0; --x) {
+                            if ((buffer32[x] & pixel_mask32) !=
+                                (old_buffer32[x] & pixel_mask32)) {
+                                out_diff[y].width = (((x + 1)<<2) - out_diff[y].left);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+            } else {
+                for (int x = 0, idx = i; x < width; ++x, ++idx) {
+                    if (!pixel_diff(buffer, old_buffer, palette, old_palette,
+                                    pixel_mask, palette_shift_mask, idx)) {
+                        continue;
+                    }
+                    out_diff[y].left = x;
+
+                    for (x = width - 1, idx = i + (width - 1);
+                         x >= 0; --x, --idx)
+                    {
+                        if (!pixel_diff(buffer, old_buffer, palette, old_palette,
+                                        pixel_mask, palette_shift_mask, idx)) {
+                            continue;
+                        }
+                        out_diff[y].width = (x - out_diff[y].left) + 1;
+                        break;
+                    }
+                    break;
+                }
+            }
+        }
     }
 }
 
-void odroid_display_unlock_sms_display()
+static void IRAM_ATTR
+odroid_buffer_diff_optimize(odroid_scanline *diff, int height)
 {
-    if (!sms_mutex) abort();
+    // Run through and count how many lines each particular run has
+    // so that we can optimise and use write_continue and save on SPI
+    // bandwidth.
+    // Because of the bandwidth required to setup the page/column
+    // address, etc., it can actually cost more to run setup than just
+    // transfer the extra pixels.
+    for (int y = height - 1; y > 0; --y) {
+        int left_diff = abs(diff[y].left - diff[y-1].left);
+        if (left_diff > 8) continue;
 
-    xSemaphoreGive(sms_mutex);
+        int right = diff[y].left + diff[y].width;
+        int right_prev = diff[y-1].left + diff[y-1].width;
+        int right_diff = abs(right - right_prev);
+        if (right_diff > 8) continue;
+
+        if (diff[y].left < diff[y-1].left)
+          diff[y-1].left = diff[y].left;
+        diff[y-1].width = (right > right_prev) ?
+          right - diff[y-1].left : right_prev - diff[y-1].left;
+        diff[y-1].repeat = diff[y].repeat + 1;
+    }
+}
+
+static inline bool
+palette_diff(uint16_t *palette1, uint16_t *palette2, int size)
+{
+    for (int i = 0; i < size; ++i) {
+        if (palette1[i] != palette2[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void IRAM_ATTR
+odroid_buffer_diff(uint8_t *buffer, uint8_t *old_buffer,
+                   uint16_t *palette, uint16_t *old_palette,
+                   int width, int height, int stride, uint8_t pixel_mask,
+                   uint8_t palette_shift_mask,
+                   odroid_scanline *out_diff)
+{
+    if (palette &&
+        !palette_diff(palette, old_palette, pixel_mask + 1))
+    {
+        // This may cause over-diffing the frame after a palette change on an
+        // interlaced frame, but I think we can deal with that.
+        pixel_mask |= palette_shift_mask;
+        palette_shift_mask = 0;
+        palette = NULL;
+    }
+
+    odroid_buffer_diff_internal(buffer, old_buffer, palette, old_palette,
+                                width, height, stride, pixel_mask,
+                                palette_shift_mask, out_diff);
+    odroid_buffer_diff_optimize(out_diff, height);
+}
+
+void IRAM_ATTR
+odroid_buffer_diff_interlaced(uint8_t *buffer, uint8_t *old_buffer,
+                              uint16_t *palette, uint16_t *old_palette,
+                              int width, int height, int stride,
+                              uint8_t pixel_mask, uint8_t palette_shift_mask,
+                              int field,
+                              odroid_scanline *out_diff,
+                              odroid_scanline *old_diff)
+{
+    bool palette_changed = false;
+
+    // If the palette might've changed then we need to just copy the whole
+    // old palette and scanline.
+    if (old_buffer) {
+        if (palette_shift_mask) {
+            palette_changed = palette_diff(palette, old_palette, pixel_mask + 1);
+        }
+
+        if (palette_changed) {
+            memcpy(&palette[(pixel_mask+1)], old_palette,
+                   (pixel_mask + 1) * sizeof(uint16_t));
+
+            for (int y = 1 - field; y < height; y += 2) {
+                int idx = y * stride;
+                for (int x = 0; x < width; ++x) {
+                    buffer[idx+x] = (old_buffer[idx+x] & pixel_mask) |
+                                    palette_shift_mask;
+                }
+            }
+        } else {
+            // If the palette didn't change then no pixels in this frame will have
+            // the palette_shift bit set, so this may cause over-diffing after
+            // palette changes but is otherwise ok.
+            pixel_mask |= palette_shift_mask;
+            palette_shift_mask = 0;
+            palette = NULL;
+        }
+    }
+
+    odroid_buffer_diff_internal(buffer + (field * stride),
+                                old_buffer ? old_buffer + (field * stride) : NULL,
+                                palette, old_palette,
+                                width, height / 2,
+                                stride * 2, pixel_mask,
+                                palette_shift_mask,
+                                out_diff);
+
+    for (int y = height - 1; y >= 0; --y) {
+        if ((y % 2) ^ field) {
+            out_diff[y].width = 0;
+            out_diff[y].repeat = 1;
+            if (!palette_changed && old_buffer) {
+                int idx = (y * stride) + old_diff[y].left;
+                memcpy(&buffer[idx], &old_buffer[idx], old_diff[y].width);
+            }
+        } else {
+            out_diff[y] = out_diff[y/2];
+        }
+    }
+}
+
+int IRAM_ATTR
+odroid_buffer_diff_count(odroid_scanline *diff, int height)
+{
+    int n_pixels = 0;
+    for (int y = 0; y < height;) {
+        n_pixels += diff[y].width * diff[y].repeat;
+        y += diff[y].repeat;
+    }
+    return n_pixels;
 }

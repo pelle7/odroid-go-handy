@@ -26,9 +26,13 @@
 */
 
 
+#pragma GCC optimize ("O3")
+
 #include <noftypes.h>
 #include "nes6502.h"
 #include "dis6502.h"
+
+#include <esp_attr.h>
 
 //#define  NES6502_DISASM
 
@@ -1202,7 +1206,7 @@ INLINE void bank_writebyte(register uint32 address, register uint8 value)
 }
 
 /* read a byte of 6502 memory */
-static uint8 mem_readbyte(uint32 address)
+static uint8 IRAM_ATTR mem_readbyte(uint32 address)
 {
    nes6502_memread *mr;
 
@@ -1232,7 +1236,7 @@ static uint8 mem_readbyte(uint32 address)
 }
 
 /* write a byte of data to 6502 memory */
-static void mem_writebyte(uint32 address, uint8 value)
+static void IRAM_ATTR mem_writebyte(uint32 address, uint8 value)
 {
    nes6502_memwrite *mw;
 
@@ -1303,7 +1307,7 @@ uint8 nes6502_getbyte(uint32 address)
 }
 
 /* get number of elapsed cycles */
-uint32 nes6502_getcycles(bool reset_flag)
+uint32 IRAM_ATTR nes6502_getcycles(bool reset_flag)
 {
    uint32 cycles = cpu.total_cycles;
 
@@ -1366,7 +1370,7 @@ uint32 nes6502_getcycles(bool reset_flag)
 ** Returns the number of cycles *actually* executed, which will be
 ** anywhere from zero to timeslice_cycles + 6
 */
-int nes6502_execute(int timeslice_cycles)
+int IRAM_ATTR nes6502_execute(int timeslice_cycles)
 {
    int old_cycles = cpu.total_cycles;
 
@@ -2422,7 +2426,7 @@ void nes6502_reset(void)
    uint8 d_flag, i_flag, z_flag, c_flag;
 
 /* Non-maskable interrupt */
-void nes6502_nmi(void)
+void IRAM_ATTR nes6502_nmi(void)
 {
    DECLARE_LOCAL_REGS
 
@@ -2436,7 +2440,7 @@ void nes6502_nmi(void)
 }
 
 /* Interrupt request */
-void nes6502_irq(void)
+void IRAM_ATTR nes6502_irq(void)
 {
    DECLARE_LOCAL_REGS
 

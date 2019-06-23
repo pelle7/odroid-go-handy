@@ -22,6 +22,9 @@
 ** Video driver
 ** $Id: vid_drv.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
+
+#pragma GCC optimize ("O3")
+
 #include <stdlib.h>
 #include <string.h>
 #include <noftypes.h>
@@ -31,12 +34,11 @@
 #include <gui.h>
 #include <osd.h>
 
-
 /* hardware surface */
 static bitmap_t *screen = NULL;
 
 /* primary / backbuffer surfaces */
-static bitmap_t *primary_buffer = NULL; //, *back_buffer = NULL;
+static bitmap_t *primary_buffer = NULL;
 
 static viddriver_t *driver = NULL;
 
@@ -132,73 +134,19 @@ void vid_setpalette(rgb_t *p)
    driver->set_palette(p);
 }
 
-/* blits a bitmap onto primary buffer */
-void vid_blit(bitmap_t *bitmap, int src_x, int src_y, int dest_x, int dest_y,
-              int width, int height)
+/* Swaps the render buffer and the primary buffer */
+void vid_swap(bitmap_t **bitmap)
 {
-   int bitmap_pitch, primary_pitch;
-   uint8 *dest_ptr, *src_ptr;
-
-   ASSERT(bitmap);
-
-   /* clip to source */
-   if (src_y >= bitmap->height)
-      return;
-   if (src_y + height > bitmap->height)
-      height = bitmap->height - src_y;
-
-   if (src_x >= bitmap->width)
-      return;
-   if (src_x + width > bitmap->width)
-      width = bitmap->width - src_x;
-
-   /* clip to dest */
-   if (dest_y + height <= 0)
+   // Hack to use the back-buffer directly
+   if (!primary_buffer)
    {
-      return;
+      primary_buffer = bmp_create((*bitmap)->width, (*bitmap)->height,
+                                  ((*bitmap)->pitch - (*bitmap)->width) / 2);
    }
-   else if (dest_y < 0)
-   {
-      height += dest_y;
-      src_y -= dest_y;
-      dest_y = 0;
-   }
-
-   if (dest_y >= primary_buffer->height)
-      return;
-   if (dest_y + height > primary_buffer->height)
-      height = primary_buffer->height - dest_y;
-
-   if (dest_x + width <= 0)
-   {
-      return;
-   }
-   else if (dest_x < 0)
-   {
-      width += dest_x;
-      src_x -= dest_x;
-      dest_x = 0;
-   }
-
-   if (dest_x >= primary_buffer->width)
-      return;
-   if (dest_x + width > primary_buffer->width)
-      width = primary_buffer->width - dest_x;
-
-   src_ptr = bitmap->line[src_y] + src_x;
-   dest_ptr = primary_buffer->line[dest_y] + dest_x;
-
-   /* Avoid doing unnecessary indexed lookups */
-   bitmap_pitch = bitmap->pitch;
-   primary_pitch = primary_buffer->pitch;
-
-   /* do the copy */
-   while (height--)
-   {
-      vid_memcpy(dest_ptr, src_ptr, width);
-      src_ptr += bitmap_pitch;
-      dest_ptr += primary_pitch;
-   }
+   bitmap_t *temp = primary_buffer;
+   primary_buffer = *bitmap;
+   *bitmap = temp;
+   return;
 }
 
 static void vid_blitscreen(int num_dirties, rect_t *dirty_rects)
@@ -333,7 +281,7 @@ INLINE int calc_dirties(rect_t *list)
 }
 #endif
 
-void vid_flush(void)
+void vid_flush(short interlace)
 {
    bitmap_t *temp;
    int num_dirties;
@@ -353,42 +301,18 @@ void vid_flush(void)
    }
 
    if (driver->custom_blit)
-      driver->custom_blit(primary_buffer, num_dirties, dirty_rects);
+      driver->custom_blit(primary_buffer, interlace);
    else
       vid_blitscreen(num_dirties, dirty_rects);
-
-   /* Swap pointers to the main/back buffers */
-//   temp = back_buffer;
-//   back_buffer = primary_buffer;
-//   primary_buffer = temp;
 }
 
 /* emulated machine tells us which resolution it wants */
 int vid_setmode(int width, int height)
 {
-   if (NULL != primary_buffer)
+   if (NULL != primary_buffer) {
       bmp_destroy(&primary_buffer);
-//   if (NULL != back_buffer)
-//      bmp_destroy(&back_buffer);
-
-   primary_buffer = bmp_create(width, height, 0); /* no overdraw */
-   if (NULL == primary_buffer)
-   {
-       abort();
-      //return -1;
-  }
-
-   /* Create our backbuffer */
-#if 0
-   back_buffer = bmp_create(width, height, 0); /* no overdraw */
-   if (NULL == back_buffer)
-   {
-      bmp_destroy(&primary_buffer);
-      return -1;
+      primary_buffer = NULL;
    }
-   bmp_clear(back_buffer, GUI_BLACK);
-#endif
-   bmp_clear(primary_buffer, GUI_BLACK);
 
    return 0;
 }
@@ -444,10 +368,6 @@ void vid_shutdown(void)
 
    if (NULL != primary_buffer)
       bmp_destroy(&primary_buffer);
-#if 0
-   if (NULL != back_buffer)
-      bmp_destroy(&back_buffer);
-#endif
 
    if (driver && driver->shutdown)
       driver->shutdown();

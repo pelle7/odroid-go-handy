@@ -23,12 +23,15 @@
 ** $Id: nes_apu.c,v 1.2 2001/04/27 14:37:11 neil Exp $
 */
 
+#pragma GCC optimize ("O3")
+
 #include <string.h>
 #include <noftypes.h>
 #include <log.h>
 #include <nes_apu.h>
 #include "nes6502.h"
- 
+
+#include <esp_attr.h>
 
 #define  APU_OVERSAMPLE
 #define  APU_VOLUME_DECAY(x)  ((x) -= ((x) >> 7))
@@ -179,7 +182,7 @@ static void shift_register15(int8 *buf, int count)
 #ifdef APU_OVERSAMPLE
 
 #define  APU_MAKE_RECTANGLE(ch) \
-static int32 apu_rectangle_##ch(void) \
+INLINE int32 apu_rectangle_##ch(void) \
 { \
    int32 output, total; \
    int num_times; \
@@ -263,7 +266,7 @@ static int32 apu_rectangle_##ch(void) \
 
 #else /* !APU_OVERSAMPLE */
 #define  APU_MAKE_RECTANGLE(ch) \
-static int32 apu_rectangle_##ch(void) \
+INLINE int32 apu_rectangle_##ch(void) \
 { \
    int32 output; \
 \
@@ -350,7 +353,7 @@ APU_MAKE_RECTANGLE(1)
 ** reg2: low 8 bits of frequency
 ** reg3: 7-3=length counter, 2-0=high 3 bits of frequency
 */
-static int32 apu_triangle(void)
+INLINE int32 apu_triangle(void)
 {
    APU_VOLUME_DECAY(apu.triangle.output_vol);
 
@@ -396,7 +399,7 @@ static int32 apu_triangle(void)
 ** reg3: 7-4=vbl length counter
 */
 /* TODO: AAAAAAAAAAAAAAAAAAAAAAAA!  #ifdef MADNESS! */
-static int32 apu_noise(void)
+INLINE int32 apu_noise(void)
 {
    int32 outvol;
 
@@ -529,7 +532,7 @@ INLINE void apu_dmcreload(void)
 ** reg2: 8 bits of 64-byte aligned address offset : $C000 + (value * 64)
 ** reg3: length, (value * 16) + 1
 */
-static int32 apu_dmc(void)
+INLINE int32 apu_dmc(void)
 {
    int delta_bit;
 
@@ -608,7 +611,7 @@ static int32 apu_dmc(void)
 }
 
 
-void apu_write(uint32 address, uint8 value)
+void IRAM_ATTR apu_write(uint32 address, uint8 value)
 {  
    int chan;
 
@@ -825,7 +828,7 @@ void apu_write(uint32 address, uint8 value)
 }
 
 /* Read from $4000-$4017 */
-uint8 apu_read(uint32 address)
+uint8 IRAM_ATTR apu_read(uint32 address)
 {
    uint8 value;
 
@@ -872,7 +875,7 @@ uint8 apu_read(uint32 address)
       out = -0x8000; \
 }
 
-void apu_process(void *buffer, int num_samples)
+void IRAM_ATTR apu_process(void *buffer, int num_samples)
 {
    static int32 prev_sample = 0;
 

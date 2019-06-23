@@ -318,12 +318,14 @@ typedef struct _SNSS_FILE
    FILE *fp;
    SNSS_OPEN_MODE mode;
    SnssFileHeader headerBlock;
-   SnssBaseBlock baseBlock;
-   SnssVramBlock vramBlock;
-   SnssSramBlock sramBlock;
-   SnssMapperBlock mapperBlock;
-   SnssControllersBlock contBlock;
-   SnssSoundBlock soundBlock;
+   union {
+      SnssBaseBlock baseBlock;
+      SnssVramBlock vramBlock;
+      SnssSramBlock sramBlock;
+      SnssMapperBlock mapperBlock;
+      SnssControllersBlock contBlock;
+      SnssSoundBlock soundBlock;
+   }
 } SNSS_FILE;
 
 #ifdef __cplusplus
@@ -332,6 +334,8 @@ extern "C" {
 
 /* general file manipulation routines */
 SNSS_RETURN_CODE SNSS_OpenFile (SNSS_FILE **snssFile, const char *filename,
+                                SNSS_OPEN_MODE mode);
+SNSS_RETURN_CODE SNSS_OpenFileRaw (SNSS_FILE **snssFile, FILE *file,
                                 SNSS_OPEN_MODE mode);
 SNSS_RETURN_CODE SNSS_CloseFile (SNSS_FILE **snssFile);
 

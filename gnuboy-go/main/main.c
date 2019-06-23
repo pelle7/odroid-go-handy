@@ -38,6 +38,7 @@
 #include "../components/odroid/odroid_audio.h"
 #include "../components/odroid/odroid_system.h"
 #include "../components/odroid/odroid_sdcard.h"
+#include "../components/odroid/odroid_ui.h"
 
 
 extern int debug_trace;
@@ -106,7 +107,7 @@ void run_to_vblank()
   /* VBLANK BEGIN */
 
   //vid_end();
-  if ((frame % 2) == 0)
+  if (((frame % 2) == 0 && !config_speedup) || (frame % 10) == 0)
   {
       xQueueSend(vidQueue, &framebuffer, portMAX_DELAY);
 
@@ -185,11 +186,11 @@ void videoTask(void *arg)
 
 
     // Draw hourglass
-    odroid_display_lock_gb_display();
+    odroid_display_lock();
 
     odroid_display_show_hourglass();
 
-    odroid_display_unlock_gb_display();
+    odroid_display_unlock();
 
 
     videoTaskIsRunning = false;
@@ -219,7 +220,7 @@ void audioTask(void* arg)
     {
         break;
     }
-    else
+    else if (!config_speedup)
     {
         pcm_submit();
     }
@@ -343,8 +344,27 @@ static void LoadState(const char* cartName)
         }
     }
 
-
+	pal_set(odroid_settings_GBPalette_get());
     Volume = odroid_settings_Volume_get();
+}
+
+bool QuickSaveState(FILE* f)
+{
+	savestate(f);
+	fclose(f);
+    return true;
+}
+
+bool QuickLoadState(FILE *f)
+{
+    loadstate(f);
+    fclose(f);
+    
+    vram_dirty();
+    pal_dirty();
+    sound_dirty();
+    mem_updatemap();
+    return true;
 }
 
 static void PowerDown()
@@ -411,8 +431,49 @@ static void DoMenuHome()
     // Reset
     esp_restart();
 }
+static void DoMenuHomeNoSave()
+{
+    esp_err_t err;
+    uint16_t* param = 1;
+
+    // Clear audio to prevent studdering
+    printf("PowerDown: stopping audio.\n");
+
+    xQueueSend(audioQueue, &param, portMAX_DELAY);
+    while (AudioTaskIsRunning) {}
 
 
+    // Stop tasks
+    printf("PowerDown: stopping tasks.\n");
+
+    xQueueSend(vidQueue, &param, portMAX_DELAY);
+    while (videoTaskIsRunning) {}
+
+
+    // Set menu application
+    odroid_system_application_set(0);
+
+
+    // Reset
+    esp_restart();
+}
+
+uint restart_menu_timer = 0;
+
+void menu_gb_pal_update(odroid_ui_entry *entry) {
+    sprintf(entry->text, "%-9s: %d", "pal", pal_get());
+}
+
+odroid_ui_func_toggle_rc menu_gb_pal_toggle(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
+    pal_next();
+    odroid_settings_GBPalette_set(pal_get());
+    restart_menu_timer = 4;
+    return ODROID_UI_FUNC_TOGGLE_RC_MENU_RESTART;
+}
+
+void menu_gb_init(odroid_ui_window *window) {
+    odroid_ui_create_entry(window, &menu_gb_pal_update, &menu_gb_pal_toggle);
+}
 
 void app_main(void)
 {
@@ -597,6 +658,10 @@ void app_main(void)
     scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_GB) ? false : true;
 
     odroid_input_gamepad_read(&lastJoysticState);
+    
+    	QuickSaveSetBuffer( (void*)(0x3f800000 + (0x100000 * 3) + (0x100000 / 2)));
+    odroid_ui_debug_enter_loop();
+    bool restart_menu = false;
 
     while (true)
     {
@@ -618,12 +683,12 @@ void app_main(void)
         }
 
         //if (!lastJoysticState.Menu && joystick.Menu)
-        if (menuButtonFrameCount > 60 * 2)
+        if (menuButtonFrameCount > 60 * 1)
         {
             // Save state
             gpio_set_level(GPIO_NUM_2, 1);
 
-            PowerDown();
+            DoMenuHome();
 
             gpio_set_level(GPIO_NUM_2, 0);
         }
@@ -631,19 +696,27 @@ void app_main(void)
         if (!ignoreMenuButton && lastJoysticState.values[ODROID_INPUT_MENU] && !joystick.values[ODROID_INPUT_MENU])
         {
             // Save state
-            gpio_set_level(GPIO_NUM_2, 1);
+            //gpio_set_level(GPIO_NUM_2, 1);
 
             //DoMenu();
-            DoMenuHome();
+            DoMenuHomeNoSave();
 
             gpio_set_level(GPIO_NUM_2, 0);
         }
 
 
-        if (!lastJoysticState.values[ODROID_INPUT_VOLUME] && joystick.values[ODROID_INPUT_VOLUME])
+        if (joystick.values[ODROID_INPUT_VOLUME] || restart_menu)
         {
-            odroid_audio_volume_change();
-            printf("main: Volume=%d\n", odroid_audio_volume_get());
+            if (restart_menu_timer > 0) {
+               restart_menu_timer--;
+            } else {
+            do {
+              
+              restart_menu = odroid_ui_menu_ext(restart_menu, &menu_gb_init);
+              uint8_t tmp = currentBuffer ? 0 : 1;
+              xQueueSend(vidQueue, &displayBuffer[tmp], portMAX_DELAY);
+            } while(restart_menu_timer == 0 && restart_menu);
+            }
         }
 
 
@@ -654,6 +727,12 @@ void app_main(void)
             odroid_settings_ScaleDisabled_set(ODROID_SCALE_DISABLE_GB, scaling_enabled ? 0 : 1);
         }
 
+		// Cycle through palets
+		if (joystick.values[ODROID_INPUT_START] && !lastJoysticState.values[ODROID_INPUT_LEFT] && joystick.values[ODROID_INPUT_LEFT])
+        {
+			pal_next();
+			odroid_settings_GBPalette_set(pal_get());
+        }
 
         pad_set(PAD_UP, joystick.values[ODROID_INPUT_UP]);
         pad_set(PAD_RIGHT, joystick.values[ODROID_INPUT_RIGHT]);

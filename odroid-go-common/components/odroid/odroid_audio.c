@@ -8,6 +8,7 @@
 
 
 
+// #define AUDIO_MUTE
 #define I2S_NUM (I2S_NUM_0)
 
 static int AudioSink = ODROID_AUDIO_SINK_SPEAKER;
@@ -24,6 +25,9 @@ odroid_volume_level odroid_audio_volume_get()
 
 void odroid_audio_volume_set(odroid_volume_level value)
 {
+#ifdef AUDIO_MUTE
+    value = ODROID_VOLUME_LEVEL0;
+#endif
     if (value >= ODROID_VOLUME_LEVEL_COUNT)
     {
         printf("odroid_audio_volume_set: value out of range (%d)\n", value);
@@ -60,9 +64,9 @@ void odroid_audio_init(ODROID_AUDIO_SINK sink, int sample_rate)
             .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,                           //2-channels
             .communication_format = I2S_COMM_FORMAT_I2S_MSB,
             //.communication_format = I2S_COMM_FORMAT_PCM,
-            .dma_buf_count = 6,
+            .dma_buf_count = 8,
             //.dma_buf_len = 1472 / 2,  // (368samples * 2ch * 2(short)) = 1472
-            .dma_buf_len = 512,  // (416samples * 2ch * 2(short)) = 1664
+            .dma_buf_len = 534,  // (416samples * 2ch * 2(short)) = 1664
             .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,                                //Interrupt level 1
             .use_apll = 0 //1
         };
@@ -80,9 +84,9 @@ void odroid_audio_init(ODROID_AUDIO_SINK sink, int sample_rate)
             .bits_per_sample = 16,
             .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,                           //2-channels
             .communication_format = I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB,
-            .dma_buf_count = 6,
+            .dma_buf_count = 8,
             //.dma_buf_len = 1472 / 2,  // (368samples * 2ch * 2(short)) = 1472
-            .dma_buf_len = 512,  // (416samples * 2ch * 2(short)) = 1664
+            .dma_buf_len = 534,  // (416samples * 2ch * 2(short)) = 1664
             .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,                                //Interrupt level 1
             .use_apll = 1
         };
@@ -258,4 +262,9 @@ void odroid_audio_submit(short* stereoAudioBuffer, int frameCount)
 int odroid_audio_sample_rate_get()
 {
     return audio_sample_rate;
+}
+
+void odroid_audio_mute()
+{
+	i2s_zero_dma_buffer(I2S_NUM);	
 }

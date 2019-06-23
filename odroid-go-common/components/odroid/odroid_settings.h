@@ -53,3 +53,6 @@ void odroid_settings_ScaleDisabled_set(ODROID_SCALE_DISABLE system, uint8_t valu
 
 ODROID_AUDIO_SINK odroid_settings_AudioSink_get();
 void odroid_settings_AudioSink_set(ODROID_AUDIO_SINK value);
+
+int32_t odroid_settings_GBPalette_get();
+void odroid_settings_GBPalette_set(int32_t value);

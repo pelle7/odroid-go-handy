@@ -47,8 +47,7 @@ typedef struct viddriver_s
    /* free a locked surface (can be NULL) */
    void      (*free_write)(int num_dirties, rect_t *dirty_rects);
    /* custom blitter - num_dirties == -1 if full blit required */
-   void      (*custom_blit)(bitmap_t *primary, int num_dirties, 
-                            rect_t *dirty_rects);
+   void      (*custom_blit)(bitmap_t *primary, short interlace);
    /* immediately invalidate the buffer, i.e. full redraw */
    bool      invalidate;
 } viddriver_t;
@@ -62,9 +61,8 @@ extern void vid_shutdown(void);
 extern int  vid_setmode(int width, int height);
 extern void vid_setpalette(rgb_t *pal);
 
-extern void vid_blit(bitmap_t *bitmap, int src_x, int src_y, int dest_x, 
-                     int dest_y, int blit_width, int blit_height);
-extern void vid_flush(void);
+extern void vid_swap(bitmap_t **bitmap);
+extern void vid_flush(short interlace);
 
 #endif /* _VID_DRV_H_ */
 
