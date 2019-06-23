@@ -19,7 +19,7 @@ static const char* NvsKey_Backlight = "Backlight";
 static const char* NvsKey_StartAction = "StartAction";
 static const char* NvsKey_ScaleDisabled = "ScaleDisabled";
 static const char* NvsKey_AudioSink = "AudioSink";
-
+static const char* NvsKey_GBPalette = "GBPalette";
 
 char* odroid_util_GetFileName(const char* path)
 {
@@ -453,7 +453,6 @@ void odroid_settings_ScaleDisabled_set(ODROID_SCALE_DISABLE system, uint8_t valu
     nvs_close(my_handle);
 }
 
-
 ODROID_AUDIO_SINK odroid_settings_AudioSink_get()
 {
     int result = ODROID_AUDIO_SINK_SPEAKER;
@@ -484,6 +483,44 @@ void odroid_settings_AudioSink_set(ODROID_AUDIO_SINK value)
 
     // Write
     err = nvs_set_i32(my_handle, NvsKey_AudioSink, (int)value);
+    if (err != ESP_OK) abort();
+
+    // Close
+    nvs_close(my_handle);
+}
+
+
+int32_t odroid_settings_GBPalette_get()
+{
+	// TODO: Move to header
+    int result = 0;
+
+    // Open
+    nvs_handle my_handle;
+    esp_err_t err = nvs_open(NvsNamespace, NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) abort();
+
+    // Read
+    err = nvs_get_i32(my_handle, NvsKey_GBPalette, &result);
+    if (err == ESP_OK)
+    {
+        printf("odroid_settings_GBPalette_get: value=%d\n", result);
+    }
+
+    // Close
+    nvs_close(my_handle);
+
+    return result;
+}
+void odroid_settings_GBPalette_set(int32_t value)
+{
+    // Open
+    nvs_handle my_handle;
+    esp_err_t err = nvs_open(NvsNamespace, NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) abort();
+
+    // Read
+    err = nvs_set_i32(my_handle, NvsKey_GBPalette, value);
     if (err != ESP_OK) abort();
 
     // Close

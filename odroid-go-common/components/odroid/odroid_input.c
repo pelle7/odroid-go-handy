@@ -84,6 +84,15 @@ odroid_gamepad_state odroid_input_read_raw()
     return state;
 }
 
+int32_t odroid_Backlight_get() {
+    return BacklightLevel;
+}
+
+void odroid_Backlight_set(int32_t value) {
+    BacklightLevel = (value + BACKLIGHT_LEVEL_COUNT)%BACKLIGHT_LEVEL_COUNT;
+    odroid_settings_Backlight_set(BacklightLevel);
+}
+
 static void odroid_input_task(void *arg)
 {
     input_task_is_running = true;
