@@ -276,8 +276,16 @@ static UBYTE* lynx_display_callback(ULONG objref)
    if(gAudioBufferPointer > 0)
    {
       int f = gAudioBufferPointer / 4; // /1 - 8 bit mono, /2 8 bit stereo, /4 16 bit stereo
-      lynx_sound_stream_update(soundBuffer, gAudioBufferPointer);
-      audio_batch_cb((const int16_t*)soundBuffer, f);
+      // lynx_sound_stream_update(soundBuffer, gAudioBufferPointer);
+      if (gAudioBufferPointer > AUDIO_BUFFER_SIZE) {
+        printf("AUDIO buffer too small! %u vs %u\n", AUDIO_BUFFER_SIZE, gAudioBufferPointer);
+        gAudioBufferPointer = AUDIO_BUFFER_SIZE;
+        f = gAudioBufferPointer / 4;
+       }
+       //memcpy(soundBuffer, snd_buffer16s, gAudioBufferPointer);
+       //audio_batch_cb((const int16_t*)soundBuffer, f);
+       audio_batch_cb((const int16_t*)snd_buffer16s, f);
+       gAudioBufferPointer = 0;
    }
 
    newFrame = true;
