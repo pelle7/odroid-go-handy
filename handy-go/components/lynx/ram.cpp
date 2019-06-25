@@ -60,11 +60,28 @@ CRam::CRam(UBYTE *filememory,ULONG filesize)
 
    // Take a copy into the backup buffer for restore on reset
    mFileSize=filesize;
+   printf("CRam::CRam\n");
+#ifdef MY_RAM_IN_32BIT
+   printf("CRam::CRam: Alloc\n");
+   ULONG *tmp = MY_MEM_ALLOC_FAST_EXT(ULONG, RAM_SIZE, 4);
+   printf("CRam::CRam: Alloc: %p\n", tmp);
+   mRamData = (UBYTE*)tmp;
+   // 8bit access crashes on mRamData
+   for (int i = 0;i < RAM_SIZE; i++) {
+    mRamData[i] = 0;
+   }
+#else
+   mRamData = MY_MEM_ALLOC_FAST_EXT(UBYTE, RAM_SIZE, 1);
+   for (int i = 0;i < RAM_SIZE; i++) {
+    mRamData[i] = 0;
+   }
+#endif
+   
 
    if(filesize)
    {
       // Take a copy of the ram data
-      mFileData = new UBYTE[mFileSize];
+      mFileData = MY_MEM_NEW_SLOW(UBYTE, mFileSize);
       memcpy(mFileData,filememory,mFileSize);
 
       // Sanity checks on the header
@@ -88,9 +105,10 @@ CRam::~CRam()
 {
    if(mFileSize)
    {
-      delete[] mFileData;
+      MY_MEM_NEW_FREE(mFileData);
       mFileData=NULL;
    }
+   MY_MEM_ALLOC_FREE(mRamData);
 }
 
 void CRam::Reset(void)

@@ -60,6 +60,7 @@
 #endif
 
 #include "machine.h"
+#include "myadd.h"
 
 #define HANDY_SYSTEM_FREQ						16000000
 #define HANDY_TIMER_FREQ						20
@@ -256,11 +257,92 @@ class CSystem : public CSystemBase
       //
       // CPU
       //
+#ifdef MY_MEM_MODE_V2
+        // mState
+        // 0x01     SUSIE_START+SUSIE_SIZE    mSusieEnabled  0xfc00
+        // 0x02     MIKIE_START+MIKIE_SIZE    mMikieEnabled  0xfd00
+        // 0x04     BROM_START+(BROM_SIZE-8)  mRomEnabled    0xfe00 0x0200 - 8
+        // 0x08     VECTOR_START,VECTOR_SIZE  mVectorsEnabled 0xfffa 0x6     
+        // mSystem.mMemoryHandlers[0xFFF8 - MY_MEM_START]=mSystem.mRam;
+        // mSystem.mMemoryHandlers[0xFFF9 - MY_MEM_START]=mSystem.mMemMap;
+
+        inline CLynxBase *Get_Handler(ULONG addr)
+        {
+            if (addr < 0xfc00) return mRam;
+            if (addr == 0xFFF9) return mMemMap;
+            // if (mMemMap->mState == 0 || addr == 0xFFF8) return mRam;
+            if (addr == 0xFFF8) return mRam;
+            if ((addr&0xff00)==0xfc00) {
+                return mMemMap->mSusieEnabled?(CLynxBase*)mSusie:(CLynxBase*)mRam;
+            } else if ((addr&0xff00)==0xfd00) {
+                return mMemMap->mMikieEnabled?(CLynxBase*)mMikie:(CLynxBase*)mRam;
+            } else if (addr>=0xfffa) {
+                return mMemMap->mVectorsEnabled?(CLynxBase*)mRom:(CLynxBase*)mRam;
+            }
+            return mMemMap->mRomEnabled?(CLynxBase*)mRom:(CLynxBase*)mRam;
+        }
+        inline void  Poke_CPU(ULONG addr, UBYTE data)
+      {
+        CLynxBase *p = Get_Handler(addr);
+        p->Poke(addr,data);
+      };
+      inline UBYTE Peek_CPU(ULONG addr)
+      {
+        CLynxBase *p = Get_Handler(addr);
+        return p->Peek(addr);
+      };
+      inline void  PokeW_CPU(ULONG addr,UWORD data)
+      {
+        CLynxBase *p = Get_Handler(addr);
+        p->Poke(addr,data&0xff);
+        addr++;
+        p = Get_Handler(addr);
+        p->Poke(addr,data>>8);
+      };
+      inline UWORD PeekW_CPU(ULONG addr)
+      {
+        //CLynxBase *p = Get_Handler(addr);
+        //return ((p->Peek(addr))+(p->Peek(addr+1)<<8));
+        return ((Get_Handler(addr)->Peek(addr))+(Get_Handler(addr+1)->Peek(addr+1)<<8));
+      };
+#else
+#ifdef MY_MEM_MODE
+      inline void  Poke_CPU(ULONG addr, UBYTE data)
+      {
+        if (addr < MY_MEM_START) mRam->Poke(addr,data);
+        else mMemoryHandlers[addr-MY_MEM_START]->Poke(addr,data);
+      };
+      inline UBYTE Peek_CPU(ULONG addr)
+      {
+        if (addr < MY_MEM_START) return mRam->Peek(addr);
+        else return mMemoryHandlers[addr-MY_MEM_START]->Peek(addr);
+      };
+      inline void  PokeW_CPU(ULONG addr,UWORD data)
+      {
+        if (addr < MY_MEM_START)
+        {
+        mRam->Poke(addr,data&0xff);
+        addr++;
+        mRam->Poke(addr,data>>8);
+        } else
+        {
+        mMemoryHandlers[addr-MY_MEM_START]->Poke(addr,data&0xff);
+        addr++;
+        mMemoryHandlers[addr-MY_MEM_START]->Poke(addr,data>>8);
+        }
+      };
+      inline UWORD PeekW_CPU(ULONG addr)
+      {
+        if (addr < MY_MEM_START) return ((mRam->Peek(addr))+(mRam->Peek(addr+1)<<8));
+        else return ((mMemoryHandlers[addr-MY_MEM_START]->Peek(addr))+(mMemoryHandlers[addr-MY_MEM_START]->Peek(addr+1)<<8));
+      };
+#else
       inline void  Poke_CPU(ULONG addr, UBYTE data) { mMemoryHandlers[addr]->Poke(addr,data);};
       inline UBYTE Peek_CPU(ULONG addr) { return mMemoryHandlers[addr]->Peek(addr);};
       inline void  PokeW_CPU(ULONG addr,UWORD data) { mMemoryHandlers[addr]->Poke(addr,data&0xff);addr++;mMemoryHandlers[addr]->Poke(addr,data>>8);};
       inline UWORD PeekW_CPU(ULONG addr) {return ((mMemoryHandlers[addr]->Peek(addr))+(mMemoryHandlers[addr]->Peek(addr+1)<<8));};
-
+#endif
+#endif
       //
       // RAM
       //
@@ -326,8 +408,14 @@ class CSystem : public CSystemBase
 
    public:
       ULONG			mCycleCountBreakpoint;
+#ifndef MY_MEM_MODE_V2
+#ifdef MY_MEM_MODE
+    CLynxBase       *mMemoryHandlers[SYSTEM_SIZE - MY_MEM_START];
+#else
       CLynxBase		*mMemoryHandlers[SYSTEM_SIZE];
       // CLynxBase		**mMemoryHandlers;
+#endif
+#endif
       CCart			*mCart;
       CRom			*mRom;
       CMemMap			*mMemMap;

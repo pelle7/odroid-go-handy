@@ -6,6 +6,8 @@
 #ifndef EEPROM_H
 #define EEPROM_H
 
+#include "myadd.h"
+
 #ifndef __min
 #define __min(a,b) \
    ({ __typeof__ (a) _a = (a); \
@@ -36,7 +38,7 @@ public:
    };
    void SetEEPROMType(UBYTE b);
    int Size(void);
-   int InitFrom(char *data,int count){ memcpy(romdata,data,__min(count,Size())); return count; /* pelle7 */};
+   // int InitFrom(char *data,int count){ memcpy(romdata,data,__min(count,Size())); return count; /* pelle7 */};
 
    void	Poke(ULONG addr,UBYTE data) { };
    UBYTE	Peek(ULONG addr)
@@ -44,14 +46,17 @@ public:
       return(0);
    };
 
-   void SetFilename(char* f){strcpy(filename,f);};
+   void SetFilename(char* f){
+      MY_ALLOC_TEXT(filename, f)
+      printf("CEEPROM: %s\n", filename);
+   };
    char* GetFilename(void){ return filename;};
    
    void Load(void);
    void Save(void);
 
 private:
-    char filename[1024];
+    char *filename;
     
    void UpdateEeprom(UWORD cnt);
    UBYTE type; // 0 ... no eeprom
@@ -68,7 +73,7 @@ private:
    UWORD readdata;
 
    ULONG data;
-   UWORD romdata[1024];// 128, 256, 512, 1024 WORDS bzw 128 bytes fuer byte zugriff
+   UWORD *romdata;//[1024];// 128, 256, 512, 1024 WORDS bzw 128 bytes fuer byte zugriff
    UWORD addr;
    int sendbits;
    bool readonly;

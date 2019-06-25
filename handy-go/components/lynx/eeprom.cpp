@@ -13,7 +13,8 @@
 CEEPROM::CEEPROM()
 {
    type=0;
-   *filename=0;
+   filename = NULL;
+   romdata = MY_MEM_ALLOC_FAST_EXT(UWORD, sizeof(UWORD) * 1024, 1);
    Reset();
 }
 
@@ -36,6 +37,10 @@ void CEEPROM::Reset(void)
 
 CEEPROM::~CEEPROM()
 {
+    if (filename) {
+        free(filename);
+    }
+    MY_MEM_ALLOC_FREE(romdata);
 }
 
 void CEEPROM::Load(void)

@@ -52,6 +52,7 @@
 #include <string.h>
 #include "system.h"
 #include "rom.h"
+#include "myadd.h"
 
 extern CErrorInterface *gError;
 
@@ -59,7 +60,9 @@ CRom::CRom(const char *romfile,bool useEmu)
 {
    mWriteEnable = FALSE;
    mValid = TRUE;
-   strncpy(mFileName,romfile,1024);
+   mFileName = NULL;
+   MY_ALLOC_TEXT(mFileName, romfile)
+   mRomData = MY_MEM_ALLOC_FAST(UBYTE, ROM_SIZE);
    Reset();
 
    // Initialise ROM
@@ -113,6 +116,12 @@ CRom::CRom(const char *romfile,bool useEmu)
                      );
       }
    }
+}
+
+CRom::~CRom()
+{
+    if (mFileName) free(mFileName);
+    MY_MEM_ALLOC_FREE(mRomData);
 }
 
 void CRom::Reset(void)
