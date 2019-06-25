@@ -143,11 +143,17 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
    ULONG filesize=0;
    ULONG howardsize=0;
    /*
+#ifndef MY_MEM_MODE_V2
+#ifdef MY_MEM_MODE
+    mMemoryHandlers = (CLynxBase**)malloc(sizeof(CLynxBase*) * (SYSTEM_SIZE - MY_MEM_START));
+#else
    mMemoryHandlers = (CLynxBase**)malloc(sizeof(CLynxBase*) * SYSTEM_SIZE);
+#endif
    if (!mMemoryHandlers) {
       printf("OUT OF MEMORY (1)!\n");
       return;
    }
+#endif
    */
    printf("CSystem: 002\n");
    
@@ -173,7 +179,7 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
       fseek(fp,0,SEEK_END);
       filesize=ftell(fp);
       fseek(fp,0,SEEK_SET);
-      filememory=(UBYTE*) new UBYTE[filesize];
+      filememory=MY_MEM_NEW_SLOW(UBYTE, filesize);
       if (!filememory) {
          printf("OUT OF MEMORY (2)!\n");
          return;
@@ -182,7 +188,7 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
       if(fread(filememory,sizeof(char),filesize,fp)!=filesize)
       {
          fprintf(stderr, "Invalid Cart (filesize).\n");
-         delete filememory;
+         MY_MEM_ALLOC_FREE(filememory);
       }
 
       fclose(fp);
@@ -203,7 +209,7 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
       {
          fprintf(stderr, "Invalid Cart (type). but 128/256/512k size -> set to RAW and try to load raw rom image\n");
          mFileType=HANDY_FILETYPE_RAW;
-         //delete filememory;// WHY????? -> crash!
+         //MY_MEM_ALLOC_FREE(filememory);// WHY????? -> crash!
       }else{
          fprintf(stderr, "Invalid Cart (type). -> set to RAW and try to load raw rom image\n");
       }
@@ -240,20 +246,20 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
             if((fp=fopen(cartgo,"rb"))==NULL)
             {
                fprintf(stderr, "Invalid Cart.\n");
-               delete filememory;
+               MY_MEM_ALLOC_FREE(filememory);
             }
 
             // How big is the file ??
             fseek(fp,0,SEEK_END);
             howardsize=ftell(fp);
             fseek(fp,0,SEEK_SET);
-            howardmemory=(UBYTE*) new UBYTE[filesize];
+            howardmemory=MY_MEM_NEW_SLOW(UBYTE, filesize);
 
             if(fread(howardmemory,sizeof(char),howardsize,fp)!=howardsize)
             {
-               delete howardmemory;
+               MY_MEM_ALLOC_FREE(howardmemory);
                fprintf(stderr, "Invalid Cart.\n");
-               delete filememory;
+               MY_MEM_ALLOC_FREE(filememory);
             }
 
             fclose(fp);
@@ -306,8 +312,8 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
          fprintf(stderr, "Invalid Snapshot.\n");
       }
    }
-   if(filesize) delete filememory;
-   if(howardsize) delete howardmemory;
+   if(filesize) { MY_MEM_ALLOC_FREE(filememory); }
+   if(howardsize) { MY_MEM_ALLOC_FREE(howardmemory); }
    mEEPROM->SetEEPROMType(mCart->mEEPROMType);
 
    {
@@ -567,7 +573,7 @@ size_t	CSystem::MemoryContextSave(const char* tmpfilename, char *context)
 
    if(NULL == context)
    {
-      filememory = (UBYTE*) new UBYTE[filesize];
+      filememory = MY_MEM_NEW_SLOW(UBYTE, filesize);
    }
    else
    {
@@ -583,7 +589,7 @@ size_t	CSystem::MemoryContextSave(const char* tmpfilename, char *context)
 
    if(NULL == context)
    {
-      delete filememory;
+      MY_MEM_ALLOC_FREE(filememory);
    }
 
    remove(tmpfilename);
@@ -700,7 +706,7 @@ bool CSystem::ContextLoad(const char *context)
       fseek(fp,0,SEEK_END);
       filesize=ftell(fp);
       fseek(fp,0,SEEK_SET);
-      filememory=(UBYTE*) new UBYTE[filesize];
+      filememory=MY_MEM_NEW_SLOW(UBYTE, filesize);
 
       if(fread(filememory,sizeof(char),filesize,fp)!=filesize)
       {
@@ -736,7 +742,7 @@ bool CSystem::ContextLoad(const char *context)
          if(mCart->CRC32()!=checksum)
          {
             delete fp;
-            delete filememory;
+            MY_MEM_ALLOC_FREE(filememory);
             fprintf(stderr, "[handy]LSS Snapshot CRC does not match the loaded cartridge image, aborting load.\n");
             return 0;
          }
@@ -794,7 +800,7 @@ bool CSystem::ContextLoad(const char *context)
    }
 
    delete fp;
-   delete filememory;
+   MY_MEM_ALLOC_FREE(filememory);
 
    return status;
 }

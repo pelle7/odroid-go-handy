@@ -231,7 +231,7 @@ class CMikie : public CLynxBase
       ULONG		mTimerInterruptMask;
 
       TPALETTE	mPalette[16];
-      ULONG		mColourMap[4096];
+      ULONG		*mColourMap;//[4096];
 
       ULONG		mIODAT;
       ULONG		mIODIR;
@@ -398,8 +398,8 @@ class CMikie : public CLynxBase
       ULONG		mAUDIO_3_INTEGRATE_ENABLE;
       ULONG		mAUDIO_3_WAVESHAPER;
 
-      SBYTE		mAUDIO_OUTPUT[4];
-      UBYTE           mAUDIO_ATTEN[4];
+      SBYTE     mAUDIO_OUTPUT[4];
+      UBYTE     mAUDIO_ATTEN[4];
       ULONG		mSTEREO;
       ULONG		mPAN;
 

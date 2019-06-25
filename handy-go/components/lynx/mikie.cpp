@@ -90,6 +90,7 @@ void CMikie::BlowOut(void)
    
    // pelle7
    mUART_Rx_input_ptr=0;
+   mColourMap = MY_MEM_ALLOC_SLOW_EXT(ULONG, sizeof(ULONG)*4096, 4);
 
    int loop;
    for(loop=0;loop<16;loop++) mPalette[loop].Index=loop;
@@ -101,6 +102,7 @@ void CMikie::BlowOut(void)
 CMikie::~CMikie()
 {
    TRACE_MIKIE0("~CMikie()");
+   MY_MEM_ALLOC_FREE(mColourMap);
 }
 
 
@@ -952,7 +954,8 @@ void CMikie::DisplaySetAttributes(ULONG Rotate,ULONG Format,ULONG Pitch,UBYTE* (
 ULONG CMikie::DisplayRenderLine(void)
 {
    UBYTE *bitmap_tmp=NULL;
-   ULONG source,loop;
+   UBYTE source;
+   ULONG loop;
    ULONG work_done=0;
 
    if(!mpDisplayBits) return 0;
@@ -1050,12 +1053,15 @@ ULONG CMikie::DisplayRenderLine(void)
             }
             else if(mDisplayFormat==MIKIE_PIXEL_FORMAT_16BPP_555 || mDisplayFormat==MIKIE_PIXEL_FORMAT_16BPP_565 || mDisplayFormat==MIKIE_PIXEL_FORMAT_16BPP_565_INV)
             {
+               UBYTE *r = &mpRamPointer[mLynxAddr];
                for(loop=0;loop<SCREEN_WIDTH/2;loop++)
                {
-                  source=mpRamPointer[mLynxAddr];
+                  //source=mpRamPointer[mLynxAddr];
+                  source=*r;
                   if(mDISPCTL_Flip)
                   {
-                     mLynxAddr--;
+                     //mLynxAddr--;
+                     r--;
                      *((UWORD*)(bitmap_tmp))=(UWORD)mColourMap[mPalette[source&0x0f].Index];
                      bitmap_tmp+=sizeof(UWORD);
                      *((UWORD*)(bitmap_tmp))=(UWORD)mColourMap[mPalette[source>>4].Index];
@@ -1063,13 +1069,18 @@ ULONG CMikie::DisplayRenderLine(void)
                   }
                   else
                   {
-                     mLynxAddr++;
+                     //mLynxAddr++;
+                     r++;
                      *((UWORD*)(bitmap_tmp))=(UWORD)mColourMap[mPalette[source>>4].Index];
                      bitmap_tmp+=sizeof(UWORD);
                      *((UWORD*)(bitmap_tmp))=(UWORD)mColourMap[mPalette[source&0x0f].Index];
                      bitmap_tmp+=sizeof(UWORD);
                   }
                }
+               if(mDISPCTL_Flip)
+               mLynxAddr-=SCREEN_WIDTH/2;
+               else
+               mLynxAddr+=SCREEN_WIDTH/2;
             }
             else if(mDisplayFormat==MIKIE_PIXEL_FORMAT_24BPP)
             {

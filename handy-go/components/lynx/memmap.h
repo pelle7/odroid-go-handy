@@ -84,12 +84,13 @@ class CMemMap : public CLynxBase
 
       // Data members
 
-   private:
+   // private:
       int				mMikieEnabled;
       int				mSusieEnabled;
       int				mRomEnabled;
       int				mVectorsEnabled;
-
+      UBYTE              mState;
+   private:
       CSystem&		mSystem;
 };
 

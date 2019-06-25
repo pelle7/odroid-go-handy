@@ -205,12 +205,19 @@ CCart::CCart(UBYTE *gamedata,ULONG gamesize)
    TRACE_CART1("CCart() - Bank1 = $%06x",mMaskBank1);
 
    // Make some space for the new carts
-
+#ifdef MY_ALLOC
+   // ULONG max = 0x07ffff + 1;
+   mCartBank0 = MY_MEM_ALLOC_SLOW(UBYTE, mMaskBank0+1);
+   mCartBank1 = MY_MEM_ALLOC_SLOW(UBYTE, __max(mMaskBank1+1, 0x00ffff + 1));
+   mCartBank0A = MY_MEM_ALLOC_SLOW(UBYTE, mMaskBank0+1);
+   mCartBank1A = MY_MEM_ALLOC_SLOW(UBYTE, mMaskBank1+1);
+#else
    mCartBank0 = (UBYTE*) new UBYTE[mMaskBank0+1];
    mCartBank1 = (UBYTE*) new UBYTE[mMaskBank1+1];
    mCartBank0A = (UBYTE*) new UBYTE[mMaskBank0+1];
    mCartBank1A = (UBYTE*) new UBYTE[mMaskBank1+1];
-
+#endif
+   
    // Set default bank
 
    mBank=bank0;
@@ -284,14 +291,19 @@ CCart::CCart(UBYTE *gamedata,ULONG gamesize)
    if(banktype1==UNUSED)
    {
       // Delete the single byte allocated  earlier
+#ifndef MY_ALLOC
       delete[] mCartBank1;
+#endif
       // Allocate some new memory for us
       TRACE_CART0("CCart() - Bank1 being converted to 64K SRAM");
       banktype1=C64K;
       mMaskBank1=0x00ffff;
       mShiftCount1=8;
       mCountMask1=0x0ff;
+#ifdef MY_ALLOC
+#else
       mCartBank1 = (UBYTE*) new UBYTE[mMaskBank1+1];
+#endif
       memset(mCartBank1, DEFAULT_RAM_CONTENTS, mMaskBank1+1);
       mWriteEnableBank1=TRUE;
       mCartRAM=TRUE;
@@ -301,10 +313,17 @@ CCart::CCart(UBYTE *gamedata,ULONG gamesize)
 CCart::~CCart()
 {
    TRACE_CART0("~CCart()");
+#ifdef MY_ALLOC
+   MY_MEM_ALLOC_FREE(mCartBank0);
+   MY_MEM_ALLOC_FREE(mCartBank1);
+   MY_MEM_ALLOC_FREE(mCartBank0A);
+   MY_MEM_ALLOC_FREE(mCartBank1A);
+#else
    delete[] mCartBank0;
    delete[] mCartBank1;
    delete[] mCartBank0A;
    delete[] mCartBank1A;
+#endif
 }
 
 
@@ -364,8 +383,11 @@ bool CCart::ContextLoad(LSS_FILE *fp)
    if(mCartRAM)
    {
       if(!lss_read(&mMaskBank1,sizeof(ULONG),1,fp)) return 0;
+#ifdef MY_ALLOC
+#else
       delete[] mCartBank1;
       mCartBank1 = new UBYTE[mMaskBank1+1];
+#endif
       if(!lss_read(mCartBank1,sizeof(UBYTE),mMaskBank1+1,fp)) return 0;
    }
    return 1;
@@ -394,10 +416,13 @@ bool CCart::ContextLoadLegacy(LSS_FILE *fp)
    if(!lss_read(&mMaskBank0,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mMaskBank1,sizeof(ULONG),1,fp)) return 0;
 
+#ifdef MY_ALLOC
+#else
    delete[] mCartBank0;
    delete[] mCartBank1;
    mCartBank0 = new UBYTE[mMaskBank0+1];
    mCartBank1 = new UBYTE[mMaskBank1+1];
+#endif
    if(!lss_read(mCartBank0,sizeof(UBYTE),mMaskBank0+1,fp)) return 0;
    if(!lss_read(mCartBank1,sizeof(UBYTE),mMaskBank1+1,fp)) return 0;
    return 1;

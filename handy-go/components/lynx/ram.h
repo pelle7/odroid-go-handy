@@ -57,6 +57,8 @@ typedef struct
    UBYTE   magic[4];
 }HOME_HEADER;
 
+// #define MY_RAM_IN_32BIT
+
 class CRam : public CLynxBase
 {
 
@@ -72,9 +74,13 @@ class CRam : public CLynxBase
       void      Clear(void);
       bool	ContextSave(FILE *fp);
       bool	ContextLoad(LSS_FILE *fp);
-
+#ifdef MY_RAM_IN_32BIT
+      void  Poke(ULONG addr, UBYTE data){ mRamData[addr]=data;};
+      UBYTE Peek(ULONG addr){ return(mRamData[addr]);};
+#else
       void	Poke(ULONG addr, UBYTE data){ mRamData[addr]=data;};
       UBYTE	Peek(ULONG addr){ return(mRamData[addr]);};
+#endif
       ULONG	ReadCycle(void) {return 5;};
       ULONG	WriteCycle(void) {return 5;};
       ULONG   ObjectSize(void) {return RAM_SIZE;};
@@ -83,7 +89,12 @@ class CRam : public CLynxBase
       // Data members
 
    private:
-      UBYTE	mRamData[RAM_SIZE];
+#ifdef MY_RAM_IN_32BIT
+      //ULONG	*mRamData;//[RAM_SIZE];
+      UBYTE   *mRamData;//[RAM_SIZE];
+#else
+      UBYTE   *mRamData;//[RAM_SIZE];
+#endif
       UBYTE	*mFileData;
       ULONG	mFileSize;
 

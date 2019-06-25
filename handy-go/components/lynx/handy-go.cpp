@@ -28,6 +28,7 @@ static retro_input_state_t input_state_cb;
 
 static CSystem *lynx = NULL;
 
+#define AUDIO_BUFFER_SIZE 1536
 static unsigned char *snd_buffer16s;
 static unsigned short *soundBuffer; //soundBuffer[4096 * 8];
 
@@ -40,7 +41,9 @@ static uint8_t lynx_height = 102;
 // #define VIDEO_CORE_PIXEL_FORMAT_16BPP MIKIE_PIXEL_FORMAT_16BPP_565
 #define VIDEO_CORE_PIXEL_FORMAT_16BPP MIKIE_PIXEL_FORMAT_16BPP_565_INV
 
-static uint16_t framebuffer[160*102*VIDEO_CORE_PIXELSIZE];
+//static uint16_t framebuffer[160*102*VIDEO_CORE_PIXELSIZE];
+extern uint16_t* framebuffer[2];
+uint8_t current_framebuffer = 0;
 
 static bool newFrame = false;
 static bool initialized = false;
@@ -213,7 +216,8 @@ static bool lynx_initialize_sound(void)
    // gAudioEnabled = true;
    gAudioEnabled = false;
    snd_buffer16s = (unsigned char *) (&gAudioBuffer);
-   soundBuffer = (unsigned short*)malloc(4096 * 8);
+   //soundBuffer = MY_MEM_ALLOC_SLOW(unsigned short, 4096 * 8);
+   soundBuffer = MY_MEM_ALLOC_FAST(unsigned short, AUDIO_BUFFER_SIZE);
    if (!soundBuffer) {
    		printf("Audio mem failed\n");
    		return false;
@@ -252,6 +256,10 @@ static bool lynx_romfilename(char *dest)
 
 inline static void lynx_sound_stream_update(unsigned short *buffer, int buf_length)
 {
+   if (buf_length > AUDIO_BUFFER_SIZE) {
+    printf("AUDIO buffer too small! %u vs %u\n", AUDIO_BUFFER_SIZE, buf_length);
+    buf_length = AUDIO_BUFFER_SIZE;
+   }
    memcpy(buffer, snd_buffer16s, buf_length);
    gAudioBufferPointer = 0;
 }
@@ -259,9 +267,11 @@ inline static void lynx_sound_stream_update(unsigned short *buffer, int buf_leng
 static UBYTE* lynx_display_callback(ULONG objref)
 {
    if(!initialized)
-      return (UBYTE*)framebuffer;
+      return (UBYTE*)framebuffer[0];
    
-   video_cb(framebuffer, lynx_width, lynx_height, 160*VIDEO_CORE_PIXELSIZE);
+   video_cb(framebuffer[current_framebuffer], lynx_width, lynx_height, 160*VIDEO_CORE_PIXELSIZE);
+   
+   current_framebuffer = current_framebuffer ? 0 : 1;
 
    if(gAudioBufferPointer > 0)
    {
@@ -271,7 +281,7 @@ static UBYTE* lynx_display_callback(ULONG objref)
    }
 
    newFrame = true;
-   return (UBYTE*)framebuffer;
+   return (UBYTE*)framebuffer[current_framebuffer];
 }
 
 static void update_geometry()

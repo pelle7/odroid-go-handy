@@ -52,6 +52,7 @@
 #include <string.h>
 #include "system.h"
 #include "memmap.h"
+#include "myadd.h"
 
 
 // IGNORE THIS TEXT, now overridden by new system
@@ -84,13 +85,14 @@
 
 void CMemMap::Reset(void)
 {
-
+#ifndef MY_MEM_MODE_V2
    // Initialise ALL pointers to RAM then overload to correct
-   for(int loop=0;loop<SYSTEM_SIZE;loop++) mSystem.mMemoryHandlers[loop]=mSystem.mRam;
+   for(int loop=0;loop<SYSTEM_SIZE - MY_MEM_START;loop++) mSystem.mMemoryHandlers[loop]=mSystem.mRam;
 
    // Special case for ourselves.
-   mSystem.mMemoryHandlers[0xFFF8]=mSystem.mRam;
-   mSystem.mMemoryHandlers[0xFFF9]=mSystem.mMemMap;
+   mSystem.mMemoryHandlers[0xFFF8 - MY_MEM_START]=mSystem.mRam;
+   mSystem.mMemoryHandlers[0xFFF9 - MY_MEM_START]=mSystem.mMemMap;
+#endif
 
    mSusieEnabled=-1;
    mMikieEnabled=-1;
@@ -147,21 +149,24 @@ inline void CMemMap::Poke(ULONG addr, UBYTE data)
    TRACE_MEMMAP1("Poke() - Data %02x",data);
 
    int newstate,loop;
+   
+   mState = data&0x0f;
 
    // FC00-FCFF Susie area
    newstate=(data&0x01)?FALSE:TRUE;
    if(newstate!=mSusieEnabled)
    {
       mSusieEnabled=newstate;
-
+#ifndef MY_MEM_MODE_V2
       if(mSusieEnabled)
       {
-         for(loop=SUSIE_START;loop<SUSIE_START+SUSIE_SIZE;loop++) mSystem.mMemoryHandlers[loop]=mSystem.mSusie;
+         for(loop=SUSIE_START;loop<SUSIE_START+SUSIE_SIZE;loop++) mSystem.mMemoryHandlers[loop-MY_MEM_START]=mSystem.mSusie;
       }
       else
       {
-         for(loop=SUSIE_START;loop<SUSIE_START+SUSIE_SIZE;loop++) mSystem.mMemoryHandlers[loop]=mSystem.mRam;
+         for(loop=SUSIE_START;loop<SUSIE_START+SUSIE_SIZE;loop++) mSystem.mMemoryHandlers[loop-MY_MEM_START]=mSystem.mRam;
       }
+#endif
    }
 
    // FD00-FCFF Mikie area
@@ -169,15 +174,16 @@ inline void CMemMap::Poke(ULONG addr, UBYTE data)
    if(newstate!=mMikieEnabled)
    {
       mMikieEnabled=newstate;
-
+#ifndef MY_MEM_MODE_V2
       if(mMikieEnabled)
       {
-         for(loop=MIKIE_START;loop<MIKIE_START+MIKIE_SIZE;loop++) mSystem.mMemoryHandlers[loop]=mSystem.mMikie;
+         for(loop=MIKIE_START;loop<MIKIE_START+MIKIE_SIZE;loop++) mSystem.mMemoryHandlers[loop-MY_MEM_START]=mSystem.mMikie;
       }
       else
       {
-         for(loop=MIKIE_START;loop<MIKIE_START+MIKIE_SIZE;loop++) mSystem.mMemoryHandlers[loop]=mSystem.mRam;
+         for(loop=MIKIE_START;loop<MIKIE_START+MIKIE_SIZE;loop++) mSystem.mMemoryHandlers[loop-MY_MEM_START]=mSystem.mRam;
       }
+#endif
    }
 
    // FE00-FFF7 Rom area
@@ -185,15 +191,16 @@ inline void CMemMap::Poke(ULONG addr, UBYTE data)
    if(newstate!=mRomEnabled)
    {
       mRomEnabled=newstate;
-
+#ifndef MY_MEM_MODE_V2
       if(mRomEnabled)
       {
-         for(loop=BROM_START;loop<BROM_START+(BROM_SIZE-8);loop++) mSystem.mMemoryHandlers[loop]=mSystem.mRom;
+         for(loop=BROM_START;loop<BROM_START+(BROM_SIZE-8);loop++) mSystem.mMemoryHandlers[loop-MY_MEM_START]=mSystem.mRom;
       }
       else
       {
-         for(loop=BROM_START;loop<BROM_START+(BROM_SIZE-8);loop++) mSystem.mMemoryHandlers[loop]=mSystem.mRam;
+         for(loop=BROM_START;loop<BROM_START+(BROM_SIZE-8);loop++) mSystem.mMemoryHandlers[loop-MY_MEM_START]=mSystem.mRam;
       }
+#endif
    }
 
    // FFFA-FFFF Vector area - Overload ROM space
@@ -201,15 +208,16 @@ inline void CMemMap::Poke(ULONG addr, UBYTE data)
    if(newstate!=mVectorsEnabled)
    {
       mVectorsEnabled=newstate;
-
+#ifndef MY_MEM_MODE_V2
       if(mVectorsEnabled)
       {
-         for(loop=VECTOR_START;loop<VECTOR_START+VECTOR_SIZE;loop++) mSystem.mMemoryHandlers[loop]=mSystem.mRom;
+         for(loop=VECTOR_START;loop<VECTOR_START+VECTOR_SIZE;loop++) mSystem.mMemoryHandlers[loop-MY_MEM_START]=mSystem.mRom;
       }
       else
       {
-         for(loop=VECTOR_START;loop<VECTOR_START+VECTOR_SIZE;loop++) mSystem.mMemoryHandlers[loop]=mSystem.mRam;
+         for(loop=VECTOR_START;loop<VECTOR_START+VECTOR_SIZE;loop++) mSystem.mMemoryHandlers[loop-MY_MEM_START]=mSystem.mRam;
       }
+#endif
    }
 
 

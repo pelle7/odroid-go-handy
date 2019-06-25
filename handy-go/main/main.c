@@ -30,18 +30,6 @@ typedef unsigned long int uint32;
 #include <stdlib.h>
 #include <string.h>
 
-/*
-2019-06-17 with sound									HEAP:0x35e1f8, FPS:34.789825, BATTERY:4156 [93]
-2019-06-17 ohne audio									HEAP:0x35e204, FPS:34.785297, BATTERY:4157 [93]
-2019-06-17 ohne audio, frameskip: 10						HEAP:0x35e204, FPS:44.046673, BATTERY:4159 [94]
-2019-06-17 ohne audio, frameskip: 1						HEAP:0x35e204, FPS:41.796509, BATTERY:4158 [94]
-2019-06-17 ohne audio, frameskip: 1, mikie: 10th line		HEAP:0x35e200, FPS:45.753841, BATTERY:4159 [94]
-2019-06-17 ohne audio, frameskip: 2, mikie: -			HEAP:0x35e204, FPS:44.118404, BATTERY:4155 [93]
-2019-06-17 ohne audio, frameskip: 2, mikie: +			HEAP:0x35e204, FPS:46.717072, BATTERY:4156 [93]
-2019-06-17 OHNE audio, frameskip: 2, mikie: +			HEAP:0x35e204, FPS:49.060566, BATTERY:4157 [93]
-2019-06-17 with audio, frameskip: 2, mikie: +			HEAP:0x35e1f8, FPS:44.029408, BATTERY:4157 [93]
-*/
-
 #define PALETTE_SIZE 256
 
 const char* SD_BASE_PATH = "/sd";
@@ -49,10 +37,12 @@ const char* SD_BASE_PATH = "/sd";
 //#define AUDIO_SAMPLE_RATE (32000)
 #define AUDIO_SAMPLE_RATE (22050)
 
-uint16 palette[PALETTE_SIZE];
+//uint16 palette[PALETTE_SIZE];
+uint16 *palette = NULL;
 uint16_t* framebuffer[2]; // uint8_t*
 int currentFramebuffer = 0;
 
+#define AUDIO_BUFFER_SIZE 1536
 uint32_t* audioBuffer = NULL;
 int audioBufferCount = 0;
 
@@ -351,23 +341,36 @@ size_t odroid_retro_audio_sample_batch_t(const int16_t *data, size_t frames) {
     odroid_audio_submit((short*)audioBuffer, frames/2 - 1);
     */
 	// send audio
-    memcpy(audioBuffer, data, frames*4);
+	/*
+	if (frames*4>AUDIO_BUFFER_SIZE) {
+	   printf("AUDIO buffer too small! %u vs %u\n", AUDIO_BUFFER_SIZE, frames*4);
+	   frames = AUDIO_BUFFER_SIZE/4;
+	}
+	memcpy(audioBuffer, data, frames*4);
 	odroid_audio_submit((short*)audioBuffer, frames - 1);
+	*/
+	odroid_audio_submit((short*)data, frames - 1);
    return 0;
 }
 
-bool skipNextFrame = true;
+// Ok
+#define FRAME_SKIP_PL1 3
+// Max speed
+//#define FRAME_SKIP_PL1 10
+// No frameskip
+//#undef FRAME_SKIP_PL1
 
+#ifdef FRAME_SKIP_PL1
+bool skipNextFrame = true;
 void odroid_retro_video_refresh_t(const void *data, unsigned width,
       unsigned height, size_t pitch) {
-     
-	 if ((frame%3)==1) {
-	 	memcpy(framebuffer[currentFramebuffer], data, height*pitch);
-	  
-	 	xQueueSend(vidQueue, &framebuffer[currentFramebuffer], portMAX_DELAY);
-     	currentFramebuffer = currentFramebuffer ? 0 : 1;
+	 if ((frame%FRAME_SKIP_PL1)==1) {
+	 	//memcpy(framebuffer[currentFramebuffer], data, height*pitch);
+	  	//xQueueSend(vidQueue, &framebuffer[currentFramebuffer], portMAX_DELAY);
+     	//currentFramebuffer = currentFramebuffer ? 0 : 1;
+     	xQueueSend(vidQueue, &data, portMAX_DELAY);
      	skipNextFrame = true;
-     } else if ((frame%3)==0) {
+     } else if ((frame%FRAME_SKIP_PL1)==0) {
          // printf("Draw frame: %d, %d\n", frame, frame%4);
      	skipNextFrame = false;
      } else {
@@ -375,6 +378,17 @@ void odroid_retro_video_refresh_t(const void *data, unsigned width,
      }
      update_fps();
 }
+#else
+bool skipNextFrame = false;
+void odroid_retro_video_refresh_t(const void *data, unsigned width,
+      unsigned height, size_t pitch) {
+      //memcpy(framebuffer[currentFramebuffer], data, height*pitch);
+      //xQueueSend(vidQueue, &framebuffer[currentFramebuffer], portMAX_DELAY);
+      //currentFramebuffer = currentFramebuffer ? 0 : 1;
+      xQueueSend(vidQueue, &data, portMAX_DELAY);
+      update_fps();
+}
+#endif
 
 void odroidgo_retro_init(void) {
 	printf("odroidgo_init\n");
@@ -414,10 +428,24 @@ void menu_lynx_init(odroid_ui_window *window) {
     odroid_ui_create_entry(window, &menu_lynx_audio_update, &menu_lynx_audio_toggle);
 }
 
+/*
+#include "esp_heap_trace.h"
+#define NUM_RECORDS 1000
+static heap_trace_record_t trace_record[NUM_RECORDS]; // This buffer must be in internal RAM
+*/
+
+void dump_heap_info_short() {
+    printf("LARGEST: 8BIT: %u\n", heap_caps_get_largest_free_block( MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT ));
+    printf("LARGEST: 32BIT: %u\n", heap_caps_get_largest_free_block( MALLOC_CAP_INTERNAL | MALLOC_CAP_32BIT ));
+    printf("LARGEST: MALLOC_CAP_INTERNAL: %u\n", heap_caps_get_largest_free_block( MALLOC_CAP_INTERNAL ));
+    printf("LARGEST: MALLOC_CAP_DEFAULT: %u\n", heap_caps_get_largest_free_block( MALLOC_CAP_DEFAULT ));
+}
+
 void app_main(void)
 {
     printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
-	
+    // ESP_ERROR_CHECK( heap_trace_init_standalone(trace_record, NUM_RECORDS) );
+    
     framebuffer[0] = heap_caps_malloc(160 * 102 * 2, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
     if (!framebuffer[0]) abort();
     printf("app_main: framebuffer[0]=%p\n", framebuffer[0]);
@@ -426,10 +454,11 @@ void app_main(void)
     if (!framebuffer[1]) abort();
     printf("app_main: framebuffer[1]=%p\n", framebuffer[1]);
 	
-    size_t bufferSize = 4096 * 2 * sizeof(int16_t);
-    audioBuffer = heap_caps_malloc(bufferSize, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
-    if (!audioBuffer) abort();
-
+	//audioBuffer = heap_caps_malloc(AUDIO_BUFFER_SIZE, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+    //if (!audioBuffer) abort();
+    
+    // ESP_ERROR_CHECK( heap_trace_start(HEAP_TRACE_LEAKS) );
+    
     nvs_flash_init();
 
     odroid_system_init();
@@ -532,7 +561,8 @@ void app_main(void)
     odroid_display_lock();
     odroid_display_drain_spi();
     
-	printf("LYNX-hande: 001\n");
+    // ESP_ERROR_CHECK( heap_trace_start(HEAP_TRACE_LEAKS) );
+    printf("LYNX-hande: 001\n");
 	printf("Version: %d; %d\n", RETRO_API_VERSION, RETRO_MEMORY_VIDEO_RAM);
 	odroidgo_retro_init();
 	retro_init();
@@ -570,6 +600,9 @@ void app_main(void)
         // system_reset();
     }
 	odroidgo_retro_init_post();
+	
+	// ESP_ERROR_CHECK( heap_trace_stop() );
+	// heap_trace_dump();
 
     odroid_gamepad_state previousState;
     odroid_input_gamepad_read(&previousState);
@@ -587,6 +620,23 @@ void app_main(void)
     startTime = xthal_get_ccount();
     
     bool menu_restart = false;
+    
+    dump_heap_info_short();
+    /*
+    uint32_t caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+    for (int i = 0; i < 64; i++) {
+    void *tmp = heap_caps_malloc(1024, caps);// MALLOC_CAP_SPIRAM
+    if (!tmp) {
+        printf("PRE-ALLOC failed #%d\n", i+1);
+        odroid_ui_debug_enter_loop();
+        printf("LARGEST: %u\n", heap_caps_get_largest_free_block( caps ));
+        abort();
+    }
+        printf("PRE-ALLOC test #%d: OK: %p\n", i+1, tmp);
+        printf("LARGEST: %u\n", heap_caps_get_largest_free_block( caps ));
+    }
+    */
+    
 
     while (true)
     {
@@ -664,4 +714,31 @@ void app_main(void)
 
         previousState = joystick;
     }
+}
+
+void *my_special_alloc(unsigned char speed, unsigned char bytes, unsigned long size) {
+    uint32_t caps = (speed?MALLOC_CAP_INTERNAL:MALLOC_CAP_SPIRAM) | 
+      ( bytes==1?MALLOC_CAP_8BIT:MALLOC_CAP_32BIT);
+      /*
+    if (speed) {
+        uint32_t max = heap_caps_get_largest_free_block(caps);
+        if (max < size) {
+            printf("ALLOC: Size: %u; Max FREE for internal is '%u'. Allocating in SPI RAM\n", (unsigned int)size, max);
+            caps = MALLOC_CAP_SPIRAM | ( size==1?MALLOC_CAP_8BIT:MALLOC_CAP_32BIT);
+        }
+    } else {
+      caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_32BIT;
+    }
+    */
+    if (!speed) caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_32BIT;
+    //if (!speed || size!=65536) caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_32BIT; // only RAM
+    void *rc = heap_caps_malloc(size, caps);
+    printf("ALLOC: Size: %-10u; SPI: %u; 32BIT: %u; RC: %p\n", (unsigned int)size, (caps&MALLOC_CAP_SPIRAM)!=0, (caps&MALLOC_CAP_32BIT)!=0, rc);
+    if (!rc) { dump_heap_info_short(); abort(); }
+    return rc;
+}
+
+void my_special_alloc_free(void *p) {
+    printf("FREE: Size: -; RC: %p\n", p);
+    if (p) heap_caps_free(p);
 }

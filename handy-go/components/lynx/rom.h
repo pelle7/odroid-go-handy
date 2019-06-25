@@ -61,6 +61,7 @@ class CRom : public CLynxBase
 
    public:
       CRom(const char *romfile,bool useEmu);
+      ~CRom();
 
    public:
       void	Reset(void);
@@ -79,8 +80,8 @@ class CRom : public CLynxBase
       bool	mWriteEnable;
       bool	mValid;
    private:
-      UBYTE	mRomData[ROM_SIZE];
-      char	mFileName[1024];
+      UBYTE	*mRomData;// [ROM_SIZE];
+      char	*mFileName;
 };
 
 #endif
