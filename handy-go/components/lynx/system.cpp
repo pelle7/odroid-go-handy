@@ -531,8 +531,8 @@ bool CSystem::ContextSave(const char *context)
    ULONG tmp=gTimerCount;
    if(!fwrite(&tmp,sizeof(ULONG),1,fp)) status=0;
 
-   if(!fwrite(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
-   if(!fwrite(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
+   // if(!fwrite(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
+   // if(!fwrite(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
    if(!fwrite(&gAudioLastUpdateCycle,sizeof(ULONG),1,fp)) status=0;
 
    // Save other device contexts
@@ -661,8 +661,8 @@ bool CSystem::MemoryContextLoad(const char *context, size_t size)
       if(!lss_read(&tmp,sizeof(ULONG),1,fp)) status=0;
       gTimerCount=tmp;
 
-      if(!lss_read(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
-      if(!lss_read(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
+      //if(!lss_read(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
+      //if(!lss_read(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
       if(!lss_read(&gAudioLastUpdateCycle,sizeof(ULONG),1,fp)) status=0;
 
       if(!mMemMap->ContextLoad(fp)) status=0;
@@ -774,8 +774,8 @@ bool CSystem::ContextLoad(const char *context)
       if(!lss_read(&tmp,sizeof(ULONG),1,fp)) status=0;
       gTimerCount=tmp;
 
-      if(!lss_read(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
-      if(!lss_read(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
+      //if(!lss_read(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
+      //if(!lss_read(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
       if(!lss_read(&gAudioLastUpdateCycle,sizeof(ULONG),1,fp)) status=0;
 
       if(!mMemMap->ContextLoad(fp)) status=0;

@@ -21,6 +21,7 @@ void send_continue_wait();
 void send_continue_line(uint16_t *line, int width, int lineCount);
 
 void ili9341_write_frame_lynx(uint16_t* buffer, uint16_t* myPalette, uint8_t scale);
+void ili9341_write_frame_lynx_v2(uint8_t* buffer, uint32_t* myPalette, uint8_t scale);
 void ili9341_write_frame_gb(uint16_t* buffer, int scale);
 
 void backlight_percentage_set(int value);

@@ -15,6 +15,7 @@ typedef unsigned short int uint16;
 typedef unsigned long int uint32;
 
 #include "../components/lynx/handy.h"
+#include "../components/lynx/myadd.h"
 
 #include "../components/odroid/odroid_settings.h"
 #include "../components/odroid/odroid_audio.h"
@@ -37,19 +38,35 @@ const char* SD_BASE_PATH = "/sd";
 //#define AUDIO_SAMPLE_RATE (32000)
 #define AUDIO_SAMPLE_RATE (22050)
 
+#define AUDIO_BUFFER_SIZE 2756
+
+struct audio_meta {
+    //uint8_t *buffer;
+    short *buffer;
+    int length;
+};
+
+uint32 *lynx_mColourMap;
 //uint16 palette[PALETTE_SIZE];
 uint16 *palette = NULL;
 uint16_t* framebuffer[2]; // uint8_t*
 int currentFramebuffer = 0;
 
-#define AUDIO_BUFFER_SIZE 1536
-uint32_t* audioBuffer = NULL;
-int audioBufferCount = 0;
+//extern unsigned char *gAudioBuffer;
+//extern unsigned char *gAudioBufferPointer2;
+extern short *gAudioBuffer;
+extern short *gAudioBufferPointer2;
+
+static struct audio_meta audio_update1 = {0,};
+static struct audio_meta audio_update2 = {0,};
+static struct audio_meta *audio_update = &audio_update1;
 
 spi_flash_mmap_handle_t hrom;
 
 QueueHandle_t vidQueue;
 TaskHandle_t videoTaskHandle;
+QueueHandle_t audioQueue;
+TaskHandle_t audioTaskHandle;
 
 odroid_volume_level Volume;
 odroid_battery_state battery;
@@ -89,7 +106,11 @@ void videoTask(void *arg)
             previous_scaling_enabled = scaling_enabled;
         }
         //render_copy_palette(palette);
+#ifdef MY_VIDEO_MODE_V1
+        ili9341_write_frame_lynx_v2(param, lynx_mColourMap, scaling_enabled);
+#else
         ili9341_write_frame_lynx(param, palette, scaling_enabled);
+#endif
 
         odroid_input_battery_level_read(&battery);
 
@@ -107,6 +128,35 @@ void videoTask(void *arg)
     vTaskDelete(NULL);
 
     while (1) {}
+}
+
+volatile bool AudioTaskIsRunning = false;
+void audioTask(void* arg)
+{
+  // sound
+  struct audio_meta* param;
+  
+  AudioTaskIsRunning = true;
+  while(1)
+  {
+    xQueuePeek(audioQueue, &param, portMAX_DELAY);
+
+    if (param == NULL)
+    {
+        break;
+    }
+    else
+    {
+       odroid_audio_submit((short*)param->buffer, param->length - 1);
+    }
+    xQueueReceive(audioQueue, &param, portMAX_DELAY);
+  }
+  printf("audioTask: exiting.\n");
+  odroid_audio_terminate();
+  AudioTaskIsRunning = false;
+  vTaskDelete(NULL);
+
+  while (1) {}
 }
 
 //Read an unaligned byte.
@@ -158,10 +208,13 @@ bool QuickLoadState(FILE* f)
 static void PowerDown()
 {
     uint16_t* param = 1;
+    void *exitAudioTask = NULL;
 
     // Clear audio to prevent studdering
     printf("PowerDown: stopping audio.\n");
-    odroid_audio_terminate();
+    // odroid_audio_terminate();
+    xQueueSend(audioQueue, &exitAudioTask, portMAX_DELAY);
+    while (AudioTaskIsRunning) {}
 
     // Stop tasks
     printf("PowerDown: stopping tasks.\n");
@@ -188,10 +241,13 @@ static void DoHome()
 {
     esp_err_t err;
     uint16_t* param = 1;
+    void *exitAudioTask = NULL;
 
     // Clear audio to prevent studdering
     printf("PowerDown: stopping audio.\n");
-    odroid_audio_terminate();
+    //odroid_audio_terminate();
+    xQueueSend(audioQueue, &exitAudioTask, portMAX_DELAY);
+    while (AudioTaskIsRunning) {}
 
 
     // Stop tasks
@@ -220,6 +276,7 @@ void system_manage_sram(uint8 *sram, int slot, int mode)
     //sram_load();
 }
 */
+//char pmem[1024];
 
 inline void update_fps() {
 	stopTime = xthal_get_ccount();
@@ -238,11 +295,15 @@ inline void update_fps() {
       float fps = frame / seconds;
 
       printf("HEAP:0x%x, FPS:%f, BATTERY:%d [%d]\n", esp_get_free_heap_size(), fps, battery.millivolts, battery.percentage);
-
+      
+      //vTaskGetRunTimeStats(pmem);
+      //printf(pmem);
+      
       frame = 0;
       totalElapsedTime = 0;
     }
     startTime = stopTime;
+    // usleep(20*1000UL);
 }
 
 
@@ -329,27 +390,19 @@ void odroid_retro_audio_sample_t(int16_t left, int16_t right) {
 
 size_t odroid_retro_audio_sample_batch_t(const int16_t *data, size_t frames) {
    // Process audio
-   /*
-    for (int x = 0; x < frames; x+=2)
-    {
-        uint32_t sample;
-        // sample = (  ( ((data[x]&0x00ff) << 8) | ((data[x]&0xff00) >> 8) )  << 16);
-        //sample = ((data[x]&0xff00) << 16);
-        sample = (data[x] << 16);
-        audioBuffer[x/2] = sample;
-    }
-    odroid_audio_submit((short*)audioBuffer, frames/2 - 1);
-    */
-	// send audio
-	/*
-	if (frames*4>AUDIO_BUFFER_SIZE) {
-	   printf("AUDIO buffer too small! %u vs %u\n", AUDIO_BUFFER_SIZE, frames*4);
-	   frames = AUDIO_BUFFER_SIZE/4;
-	}
-	memcpy(audioBuffer, data, frames*4);
-	odroid_audio_submit((short*)audioBuffer, frames - 1);
-	*/
-	odroid_audio_submit((short*)data, frames - 1);
+#ifdef MY_AUDIO_MODE_V1
+    //printf("Audio: Frames: %u\n", frames);
+    audio_update->length = frames;
+    // xQueueSend(audioQueue, &audio_update, portMAX_DELAY);
+    // *** odroid_audio_submit(audio_update->buffer, audio_update->length - 1);
+    
+    odroid_audio_submit(audio_update->buffer, audio_update->length - 1);
+    
+    audio_update = (audio_update==&audio_update1)?&audio_update2:&audio_update1;
+    gAudioBuffer = audio_update->buffer;
+#else
+    odroid_audio_submit((short*)data, frames - 1);
+#endif
    return 0;
 }
 
@@ -382,9 +435,6 @@ void odroid_retro_video_refresh_t(const void *data, unsigned width,
 bool skipNextFrame = false;
 void odroid_retro_video_refresh_t(const void *data, unsigned width,
       unsigned height, size_t pitch) {
-      //memcpy(framebuffer[currentFramebuffer], data, height*pitch);
-      //xQueueSend(vidQueue, &framebuffer[currentFramebuffer], portMAX_DELAY);
-      //currentFramebuffer = currentFramebuffer ? 0 : 1;
       xQueueSend(vidQueue, &data, portMAX_DELAY);
       update_fps();
 }
@@ -454,8 +504,15 @@ void app_main(void)
     if (!framebuffer[1]) abort();
     printf("app_main: framebuffer[1]=%p\n", framebuffer[1]);
 	
-	//audioBuffer = heap_caps_malloc(AUDIO_BUFFER_SIZE, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
-    //if (!audioBuffer) abort();
+    //audio_update1.buffer = MY_MEM_ALLOC_FAST_EXT(unsigned short, AUDIO_BUFFER_SIZE, 1);
+    //audio_update2.buffer = MY_MEM_ALLOC_FAST_EXT(unsigned short, AUDIO_BUFFER_SIZE, 1);
+    audio_update1.buffer = MY_MEM_ALLOC_FAST_EXT(short, AUDIO_BUFFER_SIZE, 1);
+    audio_update2.buffer = MY_MEM_ALLOC_FAST_EXT(short, AUDIO_BUFFER_SIZE, 1);
+    
+    gAudioBuffer = audio_update1.buffer;
+#ifdef MY_AUDIO_MODE_V1
+    gAudioBufferPointer2 = gAudioBuffer;
+#endif
     
     // ESP_ERROR_CHECK( heap_trace_start(HEAP_TRACE_LEAKS) );
     
@@ -550,6 +607,9 @@ void app_main(void)
 
     vidQueue = xQueueCreate(1, sizeof(uint16_t*));
     xTaskCreatePinnedToCore(&videoTask, "videoTask", 1024 * 4, NULL, 5, &videoTaskHandle, 1);
+    audioQueue = xQueueCreate(1, sizeof(uint16_t*));
+    xTaskCreatePinnedToCore(&audioTask, "audioTask", 2048, NULL, 5, NULL, 1); //768
+    
     
     esp_err_t r = odroid_sdcard_open(SD_BASE_PATH);
     if (r != ESP_OK)
@@ -622,6 +682,10 @@ void app_main(void)
     bool menu_restart = false;
     
     dump_heap_info_short();
+    printf("unsigned char   : %u\n", sizeof(unsigned char));
+    printf("unsigned int    : %u\n", sizeof(unsigned int));
+    printf("unsigned long   : %u\n", sizeof(unsigned long));
+    
     /*
     uint32_t caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
     for (int i = 0; i < 64; i++) {
