@@ -6,6 +6,10 @@
 // #define MY_MEM_MODE
 #define MY_MEM_MODE_V2
 
+// #define MY_AUDIO_MODE_V1
+
+#define MY_VIDEO_MODE_V1
+
 #ifdef MY_MEM_MODE
 #define MY_MEM_START 0xfc00
 #else
@@ -55,7 +59,8 @@
 extern "C" {
 #endif
 
-extern void *my_special_alloc(UBYTE speed, UBYTE bytes, ULONG size);
+//extern void *my_special_alloc(UBYTE speed, UBYTE bytes, ULONG size);
+extern void *my_special_alloc(unsigned char speed, unsigned char bytes, unsigned long size);
 extern void my_special_alloc_free(void *p);
 
 #ifdef __cplusplus

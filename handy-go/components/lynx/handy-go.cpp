@@ -30,16 +30,21 @@ static CSystem *lynx = NULL;
 
 #define AUDIO_BUFFER_SIZE 1536
 static unsigned char *snd_buffer16s;
-static unsigned short *soundBuffer; //soundBuffer[4096 * 8];
+//static unsigned short *soundBuffer; //soundBuffer[4096 * 8];
 
 static uint8_t lynx_rot = MIKIE_NO_ROTATE;
 static uint8_t lynx_width = 160;
 static uint8_t lynx_height = 102;
 
+#ifdef MY_VIDEO_MODE_V1
+#define VIDEO_CORE_PIXELSIZE    2 // MIKIE_PIXEL_FORMAT_16BPP_565
+#define VIDEO_CORE_PIXEL_FORMAT_16BPP MIKIE_PIXEL_FORMAT_RAW
+#else
 #define VIDEO_CORE_PIXELSIZE    2 // MIKIE_PIXEL_FORMAT_16BPP_565
 //#define VIDEO_CORE_PIXELSIZE  4 // MIKIE_PIXEL_FORMAT_32BPP
 // #define VIDEO_CORE_PIXEL_FORMAT_16BPP MIKIE_PIXEL_FORMAT_16BPP_565
 #define VIDEO_CORE_PIXEL_FORMAT_16BPP MIKIE_PIXEL_FORMAT_16BPP_565_INV
+#endif
 
 //static uint16_t framebuffer[160*102*VIDEO_CORE_PIXELSIZE];
 extern uint16_t* framebuffer[2];
@@ -217,11 +222,11 @@ static bool lynx_initialize_sound(void)
    gAudioEnabled = false;
    snd_buffer16s = (unsigned char *) (&gAudioBuffer);
    //soundBuffer = MY_MEM_ALLOC_SLOW(unsigned short, 4096 * 8);
-   soundBuffer = MY_MEM_ALLOC_FAST(unsigned short, AUDIO_BUFFER_SIZE);
+   /*soundBuffer = MY_MEM_ALLOC_FAST(unsigned short, AUDIO_BUFFER_SIZE);
    if (!soundBuffer) {
    		printf("Audio mem failed\n");
    		return false;
-   }
+   }*/
    return true;
 }
 
@@ -254,16 +259,6 @@ static bool lynx_romfilename(char *dest)
    return true;
 }
 
-inline static void lynx_sound_stream_update(unsigned short *buffer, int buf_length)
-{
-   if (buf_length > AUDIO_BUFFER_SIZE) {
-    printf("AUDIO buffer too small! %u vs %u\n", AUDIO_BUFFER_SIZE, buf_length);
-    buf_length = AUDIO_BUFFER_SIZE;
-   }
-   memcpy(buffer, snd_buffer16s, buf_length);
-   gAudioBufferPointer = 0;
-}
-
 static UBYTE* lynx_display_callback(ULONG objref)
 {
    if(!initialized)
@@ -275,16 +270,19 @@ static UBYTE* lynx_display_callback(ULONG objref)
 
    if(gAudioBufferPointer > 0)
    {
+#ifdef MY_AUDIO_MODE_V1
+    int f = gAudioBufferPointer / 4; // /1 - 8 bit mono, /2 8 bit stereo, /4 16 bit stereo
+    audio_batch_cb((const int16_t*)snd_buffer16s, f);
+    gAudioBufferPointer2 = gAudioBuffer;
+#else
       int f = gAudioBufferPointer / 4; // /1 - 8 bit mono, /2 8 bit stereo, /4 16 bit stereo
-      // lynx_sound_stream_update(soundBuffer, gAudioBufferPointer);
       if (gAudioBufferPointer > AUDIO_BUFFER_SIZE) {
         printf("AUDIO buffer too small! %u vs %u\n", AUDIO_BUFFER_SIZE, gAudioBufferPointer);
         gAudioBufferPointer = AUDIO_BUFFER_SIZE;
         f = gAudioBufferPointer / 4;
        }
-       //memcpy(soundBuffer, snd_buffer16s, gAudioBufferPointer);
-       //audio_batch_cb((const int16_t*)soundBuffer, f);
        audio_batch_cb((const int16_t*)snd_buffer16s, f);
+#endif
        gAudioBufferPointer = 0;
    }
 
@@ -367,12 +365,18 @@ static bool lynx_initialize_system(const char* gamepath)
       printf("DEBUG-CC-003; Error\n");
       return false;
    }
+#ifdef MY_VIDEO_MODE_V1
+   printf("DEBUG-CC: DisplaySet-01-raw\n");
+   lynx->DisplaySetAttributes(lynx_rot, VIDEO_CORE_PIXEL_FORMAT_16BPP, 160/2+64, lynx_display_callback, (ULONG)0);
+   //lynx->DisplaySetAttributes(lynx_rot, VIDEO_CORE_PIXEL_FORMAT_16BPP, 160/2, lynx_display_callback, (ULONG)0);
+#else
 #if VIDEO_CORE_PIXELSIZE==2
    printf("DEBUG-CC: DisplaySet-01\n");
    lynx->DisplaySetAttributes(lynx_rot, VIDEO_CORE_PIXEL_FORMAT_16BPP, 160*VIDEO_CORE_PIXELSIZE, lynx_display_callback, (ULONG)0);
 #elif VIDEO_CORE_PIXELSIZE==4
    printf("DEBUG-CC: DisplaySet-02\n");
    lynx->DisplaySetAttributes(lynx_rot, MIKIE_PIXEL_FORMAT_32BPP, 160*VIDEO_CORE_PIXELSIZE, lynx_display_callback, (ULONG)0);
+#endif
 #endif
    printf("DEBUG-CC-003; Ready\n");
    return true;

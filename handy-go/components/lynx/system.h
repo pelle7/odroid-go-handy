@@ -77,6 +77,8 @@
 #define HANDY_AUDIO_BUFFER_SIZE					(HANDY_AUDIO_SAMPLE_FREQ)
 #endif
 
+#define HANDY_AUDIO_BUFFER_SIZE                 (2756)
+
 
 #define HANDY_FILETYPE_LNX		0
 #define HANDY_FILETYPE_HOMEBREW	1
@@ -111,8 +113,14 @@ ULONG	gThrottleNextCycleCheckpoint=0;
 volatile ULONG gTimerCount=0;
 
 ULONG	gAudioEnabled=FALSE;
-UBYTE	gAudioBuffer[HANDY_AUDIO_BUFFER_SIZE];
-ULONG	gAudioBufferPointer=0;
+#ifdef MY_AUDIO_MODE_V1
+short   *gAudioBuffer;
+ULONG   gAudioBufferPointer=0;
+short   *gAudioBufferPointer2 = NULL;
+#else
+UBYTE   gAudioBuffer[HANDY_AUDIO_BUFFER_SIZE];
+ULONG   gAudioBufferPointer=0;
+#endif
 ULONG	gAudioLastUpdateCycle=0;
 
 CErrorInterface *gError=NULL;
@@ -138,8 +146,14 @@ extern ULONG	gThrottleNextCycleCheckpoint;
 extern volatile ULONG gTimerCount;
 
 extern ULONG	gAudioEnabled;
-extern UBYTE	gAudioBuffer[HANDY_AUDIO_BUFFER_SIZE];
+#ifdef MY_AUDIO_MODE_V1
+extern short    *gAudioBuffer;
+extern ULONG    gAudioBufferPointer;
+extern short   *gAudioBufferPointer2;
+#else
+extern UBYTE 	gAudioBuffer[HANDY_AUDIO_BUFFER_SIZE];
 extern ULONG	gAudioBufferPointer;
+#endif
 extern ULONG	gAudioLastUpdateCycle;
 
 extern CErrorInterface *gError;

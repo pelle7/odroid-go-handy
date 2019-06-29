@@ -1161,6 +1161,147 @@ void ili9341_write_frame_lynx(uint16_t* buffer, uint16_t* myPalette, uint8_t sca
     odroid_display_unlock();
 }
 
+
+typedef struct
+{
+   union
+   {
+      struct
+      {
+#ifdef MSB_FIRST
+         uint8_t unused:8;
+         uint8_t unused2:8;
+         uint8_t unused3:4;
+         uint8_t Blue:4;
+         uint8_t Red:4;
+         uint8_t Green:4;
+#else
+         uint8_t Green:4;
+         uint8_t Red:4;
+         uint8_t Blue:4;
+#endif
+      }Colours;
+      uint32_t     Index;
+   };
+}TPALETTE;
+
+void ili9341_write_frame_lynx_v2(uint8_t* buffer, uint32_t* myPalette, uint8_t scale)
+{
+    short x, y;
+    odroid_display_lock();
+    //xTaskToNotify = xTaskGetCurrentTaskHandle();
+    
+    if (buffer == NULL)
+    {
+        // clear the buffer
+        for (int i = 0; i < LINE_BUFFERS; ++i)
+        {
+            memset(line[i], 0, 320 * sizeof(uint16_t) * LINE_COUNT);
+        }
+
+        // clear the screen
+        send_reset_drawing(0, 0, 320, 240);
+
+        for (y = 0; y < 240; y += LINE_COUNT)
+        {
+            uint16_t* line_buffer = line_buffer_get();
+            send_continue_line(line_buffer, 320, LINE_COUNT);
+        }
+    }
+    else
+    {
+        uint8_t* framePtr = buffer;
+        TPALETTE    *mPaletteInLine;
+        
+        //scale = 0;
+
+        if (scale)
+        {
+            const uint16_t displayWidth = 320;
+            
+            send_reset_drawing(0, /*(240-102*2)/2*/ 18, displayWidth, LYNX_GAME_HEIGHT*2);
+
+            for (y = 0; y < LYNX_GAME_HEIGHT; y += 2)
+            {
+              uint16_t* line_buffer = line_buffer_get();
+              uint16_t* line_buffer_ptr = line_buffer; 
+              for (short i = 0; i < 2; ++i) // LINE_COUNT
+              {
+                  int index = (i*2) * displayWidth;
+
+                  mPaletteInLine = framePtr;
+                  framePtr+=64;
+
+                  for (x = 0; x < LYNX_GAME_WIDTH / 2; ++x)
+                  {
+                    uint8_t source=*framePtr;
+                    framePtr++;
+                    uint16_t value1 = myPalette[mPaletteInLine[source>>4].Index];
+                    uint16_t value2 = myPalette[mPaletteInLine[source&0x0f].Index];
+                    
+                    line_buffer[index] = value1;
+                    line_buffer[index+1] = value1;
+                    line_buffer[index+displayWidth] = value1;
+                    line_buffer[index+displayWidth+1] = value1;
+                    index+=2;
+                    line_buffer[index] = value2;
+                    line_buffer[index+1] = value2;
+                    line_buffer[index+displayWidth] = value2;
+                    line_buffer[index+displayWidth+1] = value2;
+                    index+=2;
+                  }
+              }
+              // display
+              send_continue_line(line_buffer, displayWidth, 4);
+            }
+        }
+        else
+        {
+            send_reset_drawing((320 / 2) - (LYNX_GAME_WIDTH / 2), (240 / 2) - (LYNX_GAME_HEIGHT / 2), LYNX_GAME_WIDTH, LYNX_GAME_HEIGHT);
+
+            for (y = 0; y < LYNX_GAME_HEIGHT; y += LINE_COUNT)
+            {
+              int linesWritten = 0;
+              uint16_t* line_buffer = line_buffer_get();
+
+              for (short i = 0; i < LINE_COUNT; ++i)
+              {
+                  if((y + i) >= LYNX_GAME_HEIGHT)
+                    break;
+                  mPaletteInLine = framePtr;
+                  framePtr+=64;
+                  int index = (i) * LYNX_GAME_WIDTH;
+
+                  for (x = 0; x < LYNX_GAME_WIDTH/2; ++x)
+                  {
+                    uint8_t source=*framePtr;
+                    framePtr++;
+                    uint16_t value1 = myPalette[mPaletteInLine[source>>4].Index];
+                    uint16_t value2 = myPalette[mPaletteInLine[source&0x0f].Index];
+                    //uint16_t value1 = mPaletteInLine[source>>4].Index;
+                    //uint16_t value2 = mPaletteInLine[source&0x0f].Index;
+                     
+                    line_buffer[index++] = value1;
+                    line_buffer[index++] = value2;
+                    //line_buffer[index++] = source>>4;
+                    //line_buffer[index++] = source&0x0f;
+                  }
+
+                  ++linesWritten;
+              }
+
+              // display
+              send_continue_line(line_buffer, LYNX_GAME_WIDTH, linesWritten);
+              // break;
+            }
+        }
+    }
+
+    //send_continue_wait();
+
+    odroid_display_unlock();
+}
+
 // void ili9341_write_frame(uint16_t* buffer)
 // {
 //     short x, y;
