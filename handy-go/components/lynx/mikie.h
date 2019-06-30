@@ -399,8 +399,18 @@ class CMikie : public CLynxBase
       ULONG		mAUDIO_3_INTEGRATE_ENABLE;
       ULONG		mAUDIO_3_WAVESHAPER;
 
-      SBYTE     mAUDIO_OUTPUT[4];
-      UBYTE     mAUDIO_ATTEN[4];
+      //SBYTE     mAUDIO_OUTPUT[4];
+      //UBYTE     mAUDIO_ATTEN[4];
+      
+      SBYTE     mAUDIO_OUTPUT_0;
+      UBYTE     mAUDIO_ATTEN_0;
+      SBYTE     mAUDIO_OUTPUT_1;
+      UBYTE     mAUDIO_ATTEN_1;
+      SBYTE     mAUDIO_OUTPUT_2;
+      UBYTE     mAUDIO_ATTEN_2;
+      SBYTE     mAUDIO_OUTPUT_3;
+      UBYTE     mAUDIO_ATTEN_3;
+      
       ULONG		mSTEREO;
       ULONG		mPAN;
 

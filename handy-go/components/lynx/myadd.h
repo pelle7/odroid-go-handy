@@ -3,10 +3,15 @@
 
 #include <stdlib.h>
 
+// 1: Is correct
+//#define MY_SYSTEM_LOOP 1
+// 2: Not correct
+#define MY_SYSTEM_LOOP 2
+
 // #define MY_MEM_MODE
 #define MY_MEM_MODE_V2
 
-// #define MY_AUDIO_MODE_V1
+#define MY_AUDIO_MODE 2
 
 #define MY_VIDEO_MODE_V1
 

@@ -195,16 +195,6 @@ bool DoLoadState(const char* pathName) {
     return true;
 }
 
-bool QuickSaveState(FILE* f)
-{
-    return true;
-}
-
-bool QuickLoadState(FILE* f)
-{
-    return true;
-}
-
 static void PowerDown()
 {
     uint16_t* param = 1;
@@ -513,6 +503,8 @@ void app_main(void)
 #ifdef MY_AUDIO_MODE_V1
     gAudioBufferPointer2 = gAudioBuffer;
 #endif
+    
+    QuickSaveSetBuffer( MY_MEM_ALLOC_SLOW(void, 512*1024) );
     
     // ESP_ERROR_CHECK( heap_trace_start(HEAP_TRACE_LEAKS) );
     
