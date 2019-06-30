@@ -57,9 +57,9 @@ int currentFramebuffer = 0;
 extern short *gAudioBuffer;
 extern short *gAudioBufferPointer2;
 
-static struct audio_meta audio_update1 = {0,};
-static struct audio_meta audio_update2 = {0,};
-static struct audio_meta *audio_update = &audio_update1;
+struct audio_meta audio_update1 = {0,};
+struct audio_meta audio_update2 = {0,};
+struct audio_meta *audio_update = &audio_update1;
 
 spi_flash_mmap_handle_t hrom;
 
@@ -72,7 +72,9 @@ odroid_volume_level Volume;
 odroid_battery_state battery;
 
 bool scaling_enabled = true;
+int8_t filtering = 0;
 bool previous_scaling_enabled = true;
+uint8_t previous_filtering = 0;
 
 volatile bool videoTaskIsRunning = false;
 
@@ -87,27 +89,62 @@ uint stopTime;
 uint totalElapsedTime;
 int frame;
 
+typedef void (ODROID_UI_CALLCONV *odroid_display_func_def)(uint8_t* buffer, uint32_t* myPalette);
+
+odroid_display_func_def odroid_display_func;
+
+void update_display_func() {
+  previous_scaling_enabled = scaling_enabled;
+  previous_filtering = filtering;
+  
+  if (!scaling_enabled) {
+     odroid_display_func = ili9341_write_frame_lynx_v2_original;
+  } else {
+    switch (filtering) {
+    case 0:
+        odroid_display_func = ili9341_write_frame_lynx_v2_mode0;
+    break;
+    case 1:
+        odroid_display_func = ili9341_write_frame_lynx_v2_mode1;
+    break;
+    case 2:
+        odroid_display_func = ili9341_write_frame_lynx_v2_mode2;
+    break;
+    case 3:
+        odroid_display_func = ili9341_write_frame_lynx_v2_mode3;
+    break;
+    }
+  }
+}
+
 void videoTask(void *arg)
 {
     uint8_t* param;
 
     videoTaskIsRunning = true;
-
+    
+    update_display_func();
+    
     while(1)
     {
         xQueuePeek(vidQueue, &param, portMAX_DELAY);
 
         if (param == 1)
             break;
-
-        if (previous_scaling_enabled != scaling_enabled)
+/*
+        if (previous_scaling_enabled != scaling_enabled || previous_filtering != filtering)
         {
             ili9341_write_frame_lynx(NULL, NULL, false);
             previous_scaling_enabled = scaling_enabled;
-        }
+            previous_filtering = filtering;
+        }*/
         //render_copy_palette(palette);
 #ifdef MY_VIDEO_MODE_V1
-        ili9341_write_frame_lynx_v2(param, lynx_mColourMap, scaling_enabled);
+        //ili9341_write_frame_lynx_v2(param, lynx_mColourMap, scaling_enabled, filtering);
+        odroid_display_lock();
+        ili9341_write_frame_lynx_v2_mode0(param, lynx_mColourMap);
+        //odroid_display_func(param, lynx_mColourMap);
+        odroid_display_unlock();
 #else
         ili9341_write_frame_lynx(param, palette, scaling_enabled);
 #endif
@@ -266,7 +303,49 @@ void system_manage_sram(uint8 *sram, int slot, int mode)
     //sram_load();
 }
 */
-//char pmem[1024];
+
+extern uint32    gAudioEnabled;
+
+void menu_lynx_audio_update(odroid_ui_entry *entry) {
+    if (gAudioEnabled) {
+        sprintf(entry->text, "%-9s: %s", "audio", "on");
+    } else {
+        sprintf(entry->text, "%-9s: %s", "audio", "off");
+    }
+}
+
+odroid_ui_func_toggle_rc menu_lynx_audio_toggle(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
+    gAudioEnabled = !gAudioEnabled;
+    return ODROID_UI_FUNC_TOGGLE_RC_CHANGED;
+}
+
+void menu_lynx_filtering_update(odroid_ui_entry *entry) {
+    switch(filtering) {
+    case 0:
+        sprintf(entry->text, "%-9s: %s", "filter", "none");
+        break;
+    case 1:
+        sprintf(entry->text, "%-9s: %s", "filter", "H");
+        break;
+    case 2:
+        sprintf(entry->text, "%-9s: %s", "filter", "V");
+        break;
+    case 3:
+        sprintf(entry->text, "%-9s: %s", "filter", "HV");
+        break;
+    }
+}
+
+odroid_ui_func_toggle_rc menu_lynx_filtering_toggle(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
+    filtering++;
+    if (filtering>3) filtering = 0;
+    return ODROID_UI_FUNC_TOGGLE_RC_CHANGED;
+}
+
+void menu_lynx_init(odroid_ui_window *window) {
+    odroid_ui_create_entry(window, &menu_lynx_audio_update, &menu_lynx_audio_toggle);
+    odroid_ui_create_entry(window, &menu_lynx_filtering_update, &menu_lynx_filtering_toggle);
+}
 
 inline void update_fps() {
 	stopTime = xthal_get_ccount();
@@ -363,13 +442,6 @@ bool odroidgo_env(unsigned cmd, void **data) {
    return true;
 }
 
-int16_t odroid_retro_input_state_t(unsigned port, unsigned device, 
-      unsigned index, unsigned id) {
-      return (1<<id) & retrolib_input_state_t;
-      //return retrolib_input_state_t;
-      //return ((retrolib_input_state_t&0x00ff) << 8) | ((retrolib_input_state_t&0xff00) >> 8);
-}
-
 void odroid_retro_input_poll_t() {
    //
 }
@@ -396,6 +468,218 @@ size_t odroid_retro_audio_sample_batch_t(const int16_t *data, size_t frames) {
    return 0;
 }
 
+#ifdef MY_KEYS
+
+    uint16_t powerFrameCount;
+    uint16_t previousState;
+    bool ignoreMenuButton, menu_restart;
+    
+inline void process_keys_v2(uint16_t joystick)
+{
+        retrolib_input_state_t = 0;
+        if (joystick&ODROID_INPUT_A_MASK) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_A;
+        }
+        if (joystick&ODROID_INPUT_B_MASK) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_B;
+        }
+        if (joystick&ODROID_INPUT_LEFT_MASK) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_LEFT;
+        }
+        if (joystick&ODROID_INPUT_RIGHT_MASK) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_RIGHT;
+        }
+        if (joystick&ODROID_INPUT_UP_MASK) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_UP;
+        }
+        if (joystick&ODROID_INPUT_DOWN_MASK) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_DOWN;
+        }
+        if (joystick&ODROID_INPUT_START_MASK) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_START;
+        }
+        if (joystick&ODROID_INPUT_SELECT_MASK) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_L;
+        }
+        // { RETRO_DEVICE_ID_JOYPAD_R, BUTTON_OPT2 }, 
+        
+        if (ignoreMenuButton)
+        {
+            ignoreMenuButton = previousState&ODROID_INPUT_MENU_MASK;
+        }
+
+        if (!ignoreMenuButton && previousState&ODROID_INPUT_MENU_MASK && joystick&ODROID_INPUT_MENU_MASK)
+        {
+            ++powerFrameCount;
+        }
+        else
+        {
+            powerFrameCount = 0;
+        }
+
+        // Note: this will cause an exception on 2nd Core in Debug mode
+        if (powerFrameCount > 60 * 2)
+        {
+            // Turn Blue LED on. Power state change turns it off
+            odroid_system_led_set(1);
+            PowerDown();
+        }
+
+        if (joystick&ODROID_INPUT_VOLUME_MASK || menu_restart)
+        {
+            menu_restart = odroid_ui_menu_ext(menu_restart, &menu_lynx_init);
+            if (previous_scaling_enabled != scaling_enabled || previous_filtering != filtering) {
+            odroid_display_lock();
+            ili9341_write_frame_lynx(NULL, NULL, false);
+            update_display_func();
+            odroid_display_unlock();
+            }
+        }
+
+        if (!ignoreMenuButton && previousState&ODROID_INPUT_MENU_MASK && !(joystick&ODROID_INPUT_MENU_MASK))
+        {
+            DoHome();
+        }
+
+
+        // Scaling
+        if (joystick&ODROID_INPUT_START_MASK && !(previousState&ODROID_INPUT_RIGHT_MASK) && joystick&ODROID_INPUT_RIGHT_MASK)
+        {
+            scaling_enabled = !scaling_enabled;
+            odroid_settings_ScaleDisabled_set(ODROID_SCALE_DISABLE_SMS, scaling_enabled ? 0 : 1);
+        }
+}
+
+#else
+    uint16_t powerFrameCount;
+    odroid_gamepad_state previousState;
+    bool ignoreMenuButton, menu_restart;
+    
+void process_keys(odroid_gamepad_state *joystick)
+{
+#ifndef MY_KEYS_IN_CALLBACK
+        retrolib_input_state_t = 0;
+        if (joystick->values[ODROID_INPUT_A]) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_A;
+        }
+        if (joystick->values[ODROID_INPUT_B]) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_B;
+        }
+        if (joystick->values[ODROID_INPUT_LEFT]) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_LEFT;
+        }
+        if (joystick->values[ODROID_INPUT_RIGHT]) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_RIGHT;
+        }
+        if (joystick->values[ODROID_INPUT_UP]) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_UP;
+        }
+        if (joystick->values[ODROID_INPUT_DOWN]) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_DOWN;
+        }
+        if (joystick->values[ODROID_INPUT_START]) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_START;
+        }
+        if (joystick->values[ODROID_INPUT_SELECT]) {
+                retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_L;
+        }
+        // { RETRO_DEVICE_ID_JOYPAD_R, BUTTON_OPT2 },
+#endif
+        if (ignoreMenuButton)
+        {
+            ignoreMenuButton = previousState.values[ODROID_INPUT_MENU];
+        }
+
+        if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && joystick->values[ODROID_INPUT_MENU])
+        {
+            ++powerFrameCount;
+        }
+        else
+        {
+            powerFrameCount = 0;
+        }
+
+        // Note: this will cause an exception on 2nd Core in Debug mode
+        if (powerFrameCount > 60 * 2)
+        {
+            // Turn Blue LED on. Power state change turns it off
+            odroid_system_led_set(1);
+            PowerDown();
+        }
+
+        if (joystick->values[ODROID_INPUT_VOLUME] || menu_restart)
+        {
+            menu_restart = odroid_ui_menu_ext(menu_restart, &menu_lynx_init);
+            if (previous_scaling_enabled != scaling_enabled || previous_filtering != filtering) {
+            odroid_display_lock();
+            ili9341_write_frame_lynx(NULL, NULL, false);
+            update_display_func();
+            odroid_display_unlock();
+            }
+        }
+
+        if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && !joystick->values[ODROID_INPUT_MENU])
+        {
+            DoHome();
+        }
+
+
+        // Scaling
+        if (joystick->values[ODROID_INPUT_START] && !previousState.values[ODROID_INPUT_RIGHT] && joystick->values[ODROID_INPUT_RIGHT])
+        {
+            scaling_enabled = !scaling_enabled;
+            odroid_settings_ScaleDisabled_set(ODROID_SCALE_DISABLE_SMS, scaling_enabled ? 0 : 1);
+        }
+}
+#endif
+
+#ifdef MY_KEYS_IN_CALLBACK
+int16_t odroid_retro_input_state_t(unsigned port, unsigned device, 
+      unsigned index, unsigned id) {
+      int16_t rc;
+      switch(id) {
+        case RETRO_DEVICE_ID_JOYPAD_A:
+            rc = previousState.values[ODROID_INPUT_A];
+            break;
+        case RETRO_DEVICE_ID_JOYPAD_B:
+            rc = previousState.values[ODROID_INPUT_B];
+            break;
+        case RETRO_DEVICE_ID_JOYPAD_LEFT:
+            rc = previousState.values[ODROID_INPUT_LEFT];
+            break;
+        case RETRO_DEVICE_ID_JOYPAD_RIGHT:
+            rc = previousState.values[ODROID_INPUT_RIGHT];
+            break;
+        case RETRO_DEVICE_ID_JOYPAD_UP:
+            rc = previousState.values[ODROID_INPUT_UP];
+            break;
+        case RETRO_DEVICE_ID_JOYPAD_DOWN:
+            rc = previousState.values[ODROID_INPUT_DOWN];
+            break;
+        case RETRO_DEVICE_ID_JOYPAD_START:
+            rc = previousState.values[ODROID_INPUT_START];
+            break;
+        case RETRO_DEVICE_ID_JOYPAD_L:
+            rc = previousState.values[ODROID_INPUT_SELECT];
+            break;
+        // { RETRO_DEVICE_ID_JOYPAD_R, BUTTON_OPT2 },
+        default:
+            rc = 0;
+            break;
+      }
+      return rc;
+}
+#else
+int16_t odroid_retro_input_state_t(unsigned port, unsigned device, 
+      unsigned index, unsigned id) {
+      return (1<<id) & retrolib_input_state_t;
+      //return retrolib_input_state_t;
+      //return ((retrolib_input_state_t&0x00ff) << 8) | ((retrolib_input_state_t&0xff00) >> 8);
+}
+#endif
+
+
+
 // Ok
 #define FRAME_SKIP_PL1 3
 // Max speed
@@ -420,6 +704,20 @@ void odroid_retro_video_refresh_t(const void *data, unsigned width,
      	skipNextFrame = true;
      }
      update_fps();
+
+#ifdef MY_KEYS_IN_VIDEO
+#ifdef MY_KEYS
+        uint16_t joy = odroid_input_gamepad_read_masked();
+        process_keys_v2(joy);
+        previousState=joy;
+#else
+        odroid_gamepad_state joystick;   
+        odroid_input_gamepad_read(&joystick);
+        
+        process_keys(&joystick);
+        previousState = joystick;
+#endif
+#endif
 }
 #else
 bool skipNextFrame = false;
@@ -459,25 +757,6 @@ void odroidgo_retro_init_post() {
 	retro_set_input_state(&odroid_retro_input_state_t);
 }
 
-extern uint32    gAudioEnabled;
-
-void menu_lynx_audio_update(odroid_ui_entry *entry) {
-    if (gAudioEnabled) {
-        sprintf(entry->text, "%-9s: %s", "audio", "on");
-    } else {
-        sprintf(entry->text, "%-9s: %s", "audio", "off");
-    }
-}
-
-odroid_ui_func_toggle_rc menu_lynx_audio_toggle(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
-    gAudioEnabled = !gAudioEnabled;
-    return ODROID_UI_FUNC_TOGGLE_RC_CHANGED;
-}
-
-void menu_lynx_init(odroid_ui_window *window) {
-    odroid_ui_create_entry(window, &menu_lynx_audio_update, &menu_lynx_audio_toggle);
-}
-
 /*
 #include "esp_heap_trace.h"
 #define NUM_RECORDS 1000
@@ -491,9 +770,44 @@ void dump_heap_info_short() {
     printf("LARGEST: MALLOC_CAP_DEFAULT: %u\n", heap_caps_get_largest_free_block( MALLOC_CAP_DEFAULT ));
 }
 
-void app_main(void)
+void app_loop(void)
 {
-    printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
+    powerFrameCount = 0;
+    menu_restart = false;
+#ifdef MY_KEYS
+    previousState = odroid_input_gamepad_read_masked();
+    ignoreMenuButton = previousState&ODROID_INPUT_MENU_MASK;
+#else
+    odroid_input_gamepad_read(&previousState);
+    ignoreMenuButton = previousState.values[ODROID_INPUT_MENU];
+#endif
+
+#ifdef MY_RETRO_LOOP
+    retro_run_endless();
+#else
+    while (true)
+    {
+#ifndef MY_KEYS_IN_VIDEO
+#ifdef MY_KEYS
+        uint16_t joystick = odroid_input_gamepad_read_masked();
+        process_keys_v2(joystick);
+#else
+        odroid_gamepad_state joystick;   
+        odroid_input_gamepad_read(&joystick);
+        process_keys(&joystick);
+#endif
+#endif
+        retro_run();
+#ifndef MY_KEYS_IN_VIDEO
+        previousState = joystick;
+#endif
+    }
+#endif
+}
+
+void app_init(void)
+{
+printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
     // ESP_ERROR_CHECK( heap_trace_init_standalone(trace_record, NUM_RECORDS) );
     
     framebuffer[0] = heap_caps_malloc(160 * 102 * 2, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
@@ -503,7 +817,7 @@ void app_main(void)
     framebuffer[1] = heap_caps_malloc(160 * 102 * 2, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
     if (!framebuffer[1]) abort();
     printf("app_main: framebuffer[1]=%p\n", framebuffer[1]);
-	
+    
     //audio_update1.buffer = MY_MEM_ALLOC_FAST_EXT(unsigned short, AUDIO_BUFFER_SIZE, 1);
     //audio_update2.buffer = MY_MEM_ALLOC_FAST_EXT(unsigned short, AUDIO_BUFFER_SIZE, 1);
     audio_update1.buffer = MY_MEM_ALLOC_FAST_EXT(short, AUDIO_BUFFER_SIZE, 1);
@@ -625,30 +939,30 @@ void app_main(void)
     
     // ESP_ERROR_CHECK( heap_trace_start(HEAP_TRACE_LEAKS) );
     printf("LYNX-hande: 001\n");
-	printf("Version: %d; %d\n", RETRO_API_VERSION, RETRO_MEMORY_VIDEO_RAM);
-	odroidgo_retro_init();
-	retro_init();
-	printf("LYNX-hande: 002\n");
-	
-	printf("Retro: API: %d\n", retro_api_version());
-	retro_get_system_info(&retro_info);
-	printf("Retro: Info.library_name      : %s\n", retro_info.library_name);
-	printf("Retro: Info.library_version   : %s\n", retro_info.library_version);
-	printf("Retro: Info.need_fullpath     : %d\n", retro_info.need_fullpath);
-	printf("Retro: Info.valid_extensions  : %s\n", retro_info.valid_extensions);
-	printf("Retro: Info.block_extract     : %d\n", retro_info.block_extract);
-	
-	odroid_display_unlock();
-	
-	if (!retro_load_game(&odroid_game)) {
-	    printf("LYNX-handy: 003 Gameload: Error\n");
-	} else {
-	   printf("LYNX-handy: 003 Gameload: Ok\n");
-	}
-	
-	printf("LYNX-handy: 003\n");
-	
-	// FIXME: Do some EMU stuff
+    printf("Version: %d; %d\n", RETRO_API_VERSION, RETRO_MEMORY_VIDEO_RAM);
+    odroidgo_retro_init();
+    retro_init();
+    printf("LYNX-hande: 002\n");
+    
+    printf("Retro: API: %d\n", retro_api_version());
+    retro_get_system_info(&retro_info);
+    printf("Retro: Info.library_name      : %s\n", retro_info.library_name);
+    printf("Retro: Info.library_version   : %s\n", retro_info.library_version);
+    printf("Retro: Info.need_fullpath     : %d\n", retro_info.need_fullpath);
+    printf("Retro: Info.valid_extensions  : %s\n", retro_info.valid_extensions);
+    printf("Retro: Info.block_extract     : %d\n", retro_info.block_extract);
+    
+    odroid_display_unlock();
+    
+    if (!retro_load_game(&odroid_game)) {
+        printf("LYNX-handy: 003 Gameload: Error\n");
+    } else {
+       printf("LYNX-handy: 003 Gameload: Ok\n");
+    }
+    
+    printf("LYNX-handy: 003\n");
+    
+    // FIXME: Do some EMU stuff
     // system_reset();
 
     // Restore state
@@ -661,10 +975,10 @@ void app_main(void)
         printf("%s: forceConsoleReset=true\n", __func__);
         // system_reset();
     }
-	odroidgo_retro_init_post();
-	
-	// ESP_ERROR_CHECK( heap_trace_stop() );
-	// heap_trace_dump();
+    odroidgo_retro_init_post();
+    
+    // ESP_ERROR_CHECK( heap_trace_stop() );
+    // heap_trace_dump();
 
     odroid_gamepad_state previousState;
     odroid_input_gamepad_read(&previousState);
@@ -672,16 +986,11 @@ void app_main(void)
     totalElapsedTime = 0;
     frame = 0;
     uint16_t muteFrameCount = 0;
-    uint16_t powerFrameCount = 0;
-
-    bool ignoreMenuButton = previousState.values[ODROID_INPUT_MENU];
-
+    
     scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_SMS) ? false : true;
     
     odroid_ui_debug_enter_loop();
     startTime = xthal_get_ccount();
-    
-    bool menu_restart = false;
     
     dump_heap_info_short();
     printf("unsigned char   : %u\n", sizeof(unsigned char));
@@ -702,84 +1011,12 @@ void app_main(void)
         printf("LARGEST: %u\n", heap_caps_get_largest_free_block( caps ));
     }
     */
-    
+}
 
-    while (true)
-    {
-        odroid_gamepad_state joystick;
-        odroid_input_gamepad_read(&joystick);
-        
-        retrolib_input_state_t = 0;
-        if (joystick.values[ODROID_INPUT_A]) {
-        		retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_A;
-        }
-        if (joystick.values[ODROID_INPUT_B]) {
-        		retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_B;
-        }
-        if (joystick.values[ODROID_INPUT_LEFT]) {
-        		retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_LEFT;
-        }
-        if (joystick.values[ODROID_INPUT_RIGHT]) {
-        		retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_RIGHT;
-        }
-        if (joystick.values[ODROID_INPUT_UP]) {
-        		retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_UP;
-        }
-        if (joystick.values[ODROID_INPUT_DOWN]) {
-        		retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_DOWN;
-        }
-        if (joystick.values[ODROID_INPUT_START]) {
-        		retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_START;
-        }
-        if (joystick.values[ODROID_INPUT_SELECT]) {
-        		retrolib_input_state_t |= 1 << RETRO_DEVICE_ID_JOYPAD_L;
-        }
-   		// { RETRO_DEVICE_ID_JOYPAD_R, BUTTON_OPT2 },        
-
-        if (ignoreMenuButton)
-        {
-            ignoreMenuButton = previousState.values[ODROID_INPUT_MENU];
-        }
-
-        if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && joystick.values[ODROID_INPUT_MENU])
-        {
-            ++powerFrameCount;
-        }
-        else
-        {
-            powerFrameCount = 0;
-        }
-
-        // Note: this will cause an exception on 2nd Core in Debug mode
-        if (powerFrameCount > 60 * 2)
-        {
-            // Turn Blue LED on. Power state change turns it off
-            odroid_system_led_set(1);
-            PowerDown();
-        }
-
-        if (joystick.values[ODROID_INPUT_VOLUME] || menu_restart)
-        {
-            menu_restart = odroid_ui_menu_ext(menu_restart, &menu_lynx_init);
-        }
-
-        if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && !joystick.values[ODROID_INPUT_MENU])
-        {
-            DoHome();
-        }
-
-
-        // Scaling
-        if (joystick.values[ODROID_INPUT_START] && !previousState.values[ODROID_INPUT_RIGHT] && joystick.values[ODROID_INPUT_RIGHT])
-        {
-            scaling_enabled = !scaling_enabled;
-            odroid_settings_ScaleDisabled_set(ODROID_SCALE_DISABLE_SMS, scaling_enabled ? 0 : 1);
-        }
-
-		retro_run();
-
-        previousState = joystick;
-    }
+void app_main(void)
+{
+    app_init();
+    app_loop();
 }
 
 void *my_special_alloc(unsigned char speed, unsigned char bytes, unsigned long size) {

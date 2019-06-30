@@ -21,7 +21,12 @@ void send_continue_wait();
 void send_continue_line(uint16_t *line, int width, int lineCount);
 
 void ili9341_write_frame_lynx(uint16_t* buffer, uint16_t* myPalette, uint8_t scale);
-void ili9341_write_frame_lynx_v2(uint8_t* buffer, uint32_t* myPalette, uint8_t scale);
+void ili9341_write_frame_lynx_v2(uint8_t* buffer, uint32_t* myPalette, uint8_t scale, uint8_t filtering);
+void ili9341_write_frame_lynx_v2_mode0(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_mode1(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_mode2(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_mode3(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_original(uint8_t* buffer, uint32_t* myPalette);
 void ili9341_write_frame_gb(uint16_t* buffer, int scale);
 
 void backlight_percentage_set(int value);
