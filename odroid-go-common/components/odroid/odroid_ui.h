@@ -86,3 +86,5 @@ void odroid_ui_debug_enter_loop();
 void QuickSaveSetBuffer(void* data);
 
 odroid_ui_entry *odroid_ui_create_entry(odroid_ui_window *window, odroid_ui_func_update_def func_update, odroid_ui_func_toggle_def func_toggle);
+
+char *odroid_ui_choose_file(const char *path, const char *ext);

@@ -432,7 +432,17 @@ void odroid_retro_video_refresh_t(const void *data, unsigned width,
 
 void odroidgo_retro_init(void) {
 	printf("odroidgo_init\n");
-	odroid_game.path = "/sd/roms/lynx/_debug.lnx";
+	odroid_display_unlock();
+	char *rc = odroid_ui_choose_file("/sd/roms/lynx", "lnx");
+	odroid_display_lock();
+	if (rc) {
+	   printf("File: %s\n", rc);
+	   odroid_game.path = rc;
+	} else {
+	   printf("File: ---\n");
+	   odroid_game.path = "/sd/roms/lynx/_debug.lnx";
+	}
+	
 	odroid_game.data = NULL;
     odroid_game.size = 0;
     odroid_game.meta = "dummy";
