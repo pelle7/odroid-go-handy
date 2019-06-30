@@ -562,6 +562,16 @@ void AAA_sayHi(const char *name) {
     printf("Called CPP file! '%s'\n", name);
 }
 
+bool QuickSaveState(FILE* f)
+{
+    return lynx->ContextSave(f);
+}
+
+bool QuickLoadState(FILE* f)
+{
+    return lynx->ContextLoad(f);
+}
+
 #ifdef __cplusplus
 }
 #endif

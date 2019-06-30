@@ -500,8 +500,15 @@ bool CSystem::ContextSave(const char *context)
 {
    FILE *fp;
    bool status=1;
-
    if((fp=fopen(context,"wb"))==NULL) return false;
+   status = ContextSave(fp);
+   fclose(fp);
+   return status;
+}
+
+bool CSystem::ContextSave(FILE *fp)
+{
+   bool status=1;
 
    if(!fprintf(fp,LSS_VERSION)) status=0;
 
@@ -531,21 +538,22 @@ bool CSystem::ContextSave(const char *context)
    ULONG tmp=gTimerCount;
    if(!fwrite(&tmp,sizeof(ULONG),1,fp)) status=0;
 
-   // if(!fwrite(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
-   // if(!fwrite(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
+   // ** if(!fwrite(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
+   // ** if(!fwrite(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
    if(!fwrite(&gAudioLastUpdateCycle,sizeof(ULONG),1,fp)) status=0;
 
    // Save other device contexts
    if(!mMemMap->ContextSave(fp)) status=0;
+
    if(!mCart->ContextSave(fp)) status=0;
-   if(!mEEPROM->ContextSave(fp)) status=0;
+
+   // *** if(!mEEPROM->ContextSave(fp)) status=0;
    //	if(!mRom->ContextSave(fp)) status=0; We no longer save the system ROM
    if(!mRam->ContextSave(fp)) status=0;
    if(!mMikie->ContextSave(fp)) status=0;
    if(!mSusie->ContextSave(fp)) status=0;
    if(!mCpu->ContextSave(fp)) status=0;
 
-   fclose(fp);
    return status;
 }
 
@@ -693,27 +701,32 @@ bool CSystem::MemoryContextLoad(const char *context, size_t size)
 
 bool CSystem::ContextLoad(const char *context)
 {
+    bool status=1;
+    FILE *fp;
+    if((fp=fopen(context,"rb"))==NULL) return false;
+    status = ContextLoad(fp);
+    fclose(fp);
+    return status;
+}
+
+bool CSystem::ContextLoad(FILE *fp_full)
+{
    LSS_FILE *fp;
    bool status=1;
    UBYTE *filememory=NULL;
    ULONG filesize=0;
 
    {
-      FILE *fp;
       // Just open an read into memory
-      if((fp=fopen(context,"rb"))==NULL) status=0;
-
-      fseek(fp,0,SEEK_END);
-      filesize=ftell(fp);
-      fseek(fp,0,SEEK_SET);
+      fseek(fp_full,0,SEEK_END);
+      filesize=ftell(fp_full);
+      fseek(fp_full,0,SEEK_SET);
       filememory=MY_MEM_NEW_SLOW(UBYTE, filesize);
 
-      if(fread(filememory,sizeof(char),filesize,fp)!=filesize)
+      if(fread(filememory,sizeof(char),filesize,fp_full)!=filesize)
       {
-         fclose(fp);
          return 1;
       }
-      fclose(fp);
    }
 
    // Setup our read structure
@@ -774,8 +787,8 @@ bool CSystem::ContextLoad(const char *context)
       if(!lss_read(&tmp,sizeof(ULONG),1,fp)) status=0;
       gTimerCount=tmp;
 
-      //if(!lss_read(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
-      //if(!lss_read(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
+      // ** if(!lss_read(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
+      // ** if(!lss_read(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
       if(!lss_read(&gAudioLastUpdateCycle,sizeof(ULONG),1,fp)) status=0;
 
       if(!mMemMap->ContextLoad(fp)) status=0;

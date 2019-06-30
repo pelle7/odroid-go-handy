@@ -219,8 +219,11 @@ class CSystem : public CSystemBase
       bool	MemoryContextLoad(const char *context, size_t size);
       bool	ContextSave(const char *context);
       bool	ContextLoad(const char *context);
+      bool  ContextSave(FILE *f);
+      bool  ContextLoad(FILE *f);
       bool	IsZip(char *filename);
 
+#ifndef MY_SYSTEM_LOOP
       inline void Update(void)
       {
          //		    fprintf(stderr, "sys update\n");
@@ -234,8 +237,8 @@ class CSystem : public CSystemBase
          //
          // Step the processor through 1 instruction
          //
-         mCpu->Update();
-         //			fprintf(stderr, "end cpu update\n");
+        mCpu->Update();
+         //         fprintf(stderr, "end cpu update\n");
 
 #ifdef _LYNXDBG
          // Check breakpoint
@@ -255,9 +258,47 @@ class CSystem : public CSystemBase
             gSystemCycleCount=gNextTimerEvent;
          }
 
-         //			fprintf(stderr, "end sys update\n");
+         //			fprintf(stderr, "end sys update\n"); 
       }
+#else
+#if MY_SYSTEM_LOOP==1
+      inline void Update(void)
+      {
+        if(gSystemCycleCount>=gNextTimerEvent)
+         {
+            mMikie->Update();
+         }
+         while (gSystemCycleCount<gNextTimerEvent) {
+            mCpu->Update();
+            if(gSystemCPUSleep)
+             {
+                gSystemCycleCount=gNextTimerEvent;
+                break;
+             }
+         }
+      }
+#endif
+#if MY_SYSTEM_LOOP==2
+      inline void Update(void)
+      {
+        if(gSystemCycleCount>=gNextTimerEvent)
+         {
+            mMikie->Update();
+         }
+         while (gSystemCycleCount<gNextTimerEvent) {
+            mCpu->Update();
+            mCpu->Update();
+            mCpu->Update();
+            if(gSystemCPUSleep)
+             {
+                gSystemCycleCount=gNextTimerEvent;
+                break;
+             }
+         }
+      }
+#endif
 
+#endif
       //
       // We MUST have separate CPU & RAM peek & poke handlers as all CPU accesses must
       // go thru the address generator at $FFF9

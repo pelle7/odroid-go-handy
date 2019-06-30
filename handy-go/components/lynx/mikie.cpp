@@ -232,7 +232,7 @@ void CMikie::Reset(void)
    mAUDIO_0_LAST_LINK_CARRY=0;
    mAUDIO_0_LAST_COUNT=0;
    mAUDIO_0_VOLUME=0;
-   mAUDIO_OUTPUT[0]=0;
+   mAUDIO_OUTPUT_0=0;
    mAUDIO_0_INTEGRATE_ENABLE=0;
    mAUDIO_0_WAVESHAPER=0;
 
@@ -248,7 +248,7 @@ void CMikie::Reset(void)
    mAUDIO_1_LAST_LINK_CARRY=0;
    mAUDIO_1_LAST_COUNT=0;
    mAUDIO_1_VOLUME=0;
-   mAUDIO_OUTPUT[1]=0;
+   mAUDIO_OUTPUT_1=0;
    mAUDIO_1_INTEGRATE_ENABLE=0;
    mAUDIO_1_WAVESHAPER=0;
 
@@ -264,7 +264,7 @@ void CMikie::Reset(void)
    mAUDIO_2_LAST_LINK_CARRY=0;
    mAUDIO_2_LAST_COUNT=0;
    mAUDIO_2_VOLUME=0;
-   mAUDIO_OUTPUT[2]=0;
+   mAUDIO_OUTPUT_2=0;
    mAUDIO_2_INTEGRATE_ENABLE=0;
    mAUDIO_2_WAVESHAPER=0;
 
@@ -280,16 +280,16 @@ void CMikie::Reset(void)
    mAUDIO_3_LAST_LINK_CARRY=0;
    mAUDIO_3_LAST_COUNT=0;
    mAUDIO_3_VOLUME=0;
-   mAUDIO_OUTPUT[3]=0;
+   mAUDIO_OUTPUT_3=0;
    mAUDIO_3_INTEGRATE_ENABLE=0;
    mAUDIO_3_WAVESHAPER=0;
 
 	mSTEREO=0x00;	// xored! All channels enabled
 	mPAN=0x00;      // all channels panning OFF
-        mAUDIO_ATTEN[0]=0xff; // Full volume
-        mAUDIO_ATTEN[1]=0xff;
-        mAUDIO_ATTEN[2]=0xff;
-        mAUDIO_ATTEN[3]=0xff;
+        mAUDIO_ATTEN_0=0xff; // Full volume
+        mAUDIO_ATTEN_1=0xff;
+        mAUDIO_ATTEN_2=0xff;
+        mAUDIO_ATTEN_3=0xff;
 
    // Start with an empty palette
 
@@ -505,7 +505,7 @@ bool CMikie::ContextSave(FILE *fp)
    if(!fwrite(&mAUDIO_0_LAST_LINK_CARRY,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_0_LAST_COUNT,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_0_VOLUME,sizeof(SBYTE),1,fp)) return 0;
-   if(!fwrite(&mAUDIO_OUTPUT[0],sizeof(SBYTE),1,fp)) return 0;
+   if(!fwrite(&mAUDIO_OUTPUT_0,sizeof(SBYTE),1,fp)) return 0;
    if(!fwrite(&mAUDIO_0_INTEGRATE_ENABLE,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_0_WAVESHAPER,sizeof(ULONG),1,fp)) return 0;
 
@@ -521,7 +521,7 @@ bool CMikie::ContextSave(FILE *fp)
    if(!fwrite(&mAUDIO_1_LAST_LINK_CARRY,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_1_LAST_COUNT,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_1_VOLUME,sizeof(SBYTE),1,fp)) return 0;
-   if(!fwrite(&mAUDIO_OUTPUT[1],sizeof(SBYTE),1,fp)) return 0;
+   if(!fwrite(&mAUDIO_OUTPUT_1,sizeof(SBYTE),1,fp)) return 0;
    if(!fwrite(&mAUDIO_1_INTEGRATE_ENABLE,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_1_WAVESHAPER,sizeof(ULONG),1,fp)) return 0;
 
@@ -537,7 +537,7 @@ bool CMikie::ContextSave(FILE *fp)
    if(!fwrite(&mAUDIO_2_LAST_LINK_CARRY,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_2_LAST_COUNT,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_2_VOLUME,sizeof(SBYTE),1,fp)) return 0;
-   if(!fwrite(&mAUDIO_OUTPUT[2],sizeof(SBYTE),1,fp)) return 0;
+   if(!fwrite(&mAUDIO_OUTPUT_2,sizeof(SBYTE),1,fp)) return 0;
    if(!fwrite(&mAUDIO_2_INTEGRATE_ENABLE,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_2_WAVESHAPER,sizeof(ULONG),1,fp)) return 0;
 
@@ -553,7 +553,7 @@ bool CMikie::ContextSave(FILE *fp)
    if(!fwrite(&mAUDIO_3_LAST_LINK_CARRY,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_3_LAST_COUNT,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_3_VOLUME,sizeof(SBYTE),1,fp)) return 0;
-   if(!fwrite(&mAUDIO_OUTPUT[3],sizeof(SBYTE),1,fp)) return 0;
+   if(!fwrite(&mAUDIO_OUTPUT_3,sizeof(SBYTE),1,fp)) return 0;
    if(!fwrite(&mAUDIO_3_INTEGRATE_ENABLE,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mAUDIO_3_WAVESHAPER,sizeof(ULONG),1,fp)) return 0;
 
@@ -712,7 +712,7 @@ bool CMikie::ContextLoad(LSS_FILE *fp)
    if(!lss_read(&mAUDIO_0_LAST_LINK_CARRY,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_0_LAST_COUNT,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_0_VOLUME,sizeof(SBYTE),1,fp)) return 0;
-   if(!lss_read(&mAUDIO_OUTPUT[0],sizeof(SBYTE),1,fp)) return 0;
+   if(!lss_read(&mAUDIO_OUTPUT_0,sizeof(SBYTE),1,fp)) return 0;
    if(!lss_read(&mAUDIO_0_INTEGRATE_ENABLE,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_0_WAVESHAPER,sizeof(ULONG),1,fp)) return 0;
 
@@ -728,7 +728,7 @@ bool CMikie::ContextLoad(LSS_FILE *fp)
    if(!lss_read(&mAUDIO_1_LAST_LINK_CARRY,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_1_LAST_COUNT,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_1_VOLUME,sizeof(SBYTE),1,fp)) return 0;
-   if(!lss_read(&mAUDIO_OUTPUT[1],sizeof(SBYTE),1,fp)) return 0;
+   if(!lss_read(&mAUDIO_OUTPUT_1,sizeof(SBYTE),1,fp)) return 0;
    if(!lss_read(&mAUDIO_1_INTEGRATE_ENABLE,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_1_WAVESHAPER,sizeof(ULONG),1,fp)) return 0;
 
@@ -744,7 +744,7 @@ bool CMikie::ContextLoad(LSS_FILE *fp)
    if(!lss_read(&mAUDIO_2_LAST_LINK_CARRY,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_2_LAST_COUNT,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_2_VOLUME,sizeof(SBYTE),1,fp)) return 0;
-   if(!lss_read(&mAUDIO_OUTPUT[2],sizeof(SBYTE),1,fp)) return 0;
+   if(!lss_read(&mAUDIO_OUTPUT_2,sizeof(SBYTE),1,fp)) return 0;
    if(!lss_read(&mAUDIO_2_INTEGRATE_ENABLE,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_2_WAVESHAPER,sizeof(ULONG),1,fp)) return 0;
 
@@ -760,7 +760,7 @@ bool CMikie::ContextLoad(LSS_FILE *fp)
    if(!lss_read(&mAUDIO_3_LAST_LINK_CARRY,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_3_LAST_COUNT,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_3_VOLUME,sizeof(SBYTE),1,fp)) return 0;
-   if(!lss_read(&mAUDIO_OUTPUT[3],sizeof(SBYTE),1,fp)) return 0;
+   if(!lss_read(&mAUDIO_OUTPUT_3,sizeof(SBYTE),1,fp)) return 0;
    if(!lss_read(&mAUDIO_3_INTEGRATE_ENABLE,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mAUDIO_3_WAVESHAPER,sizeof(ULONG),1,fp)) return 0;
 
@@ -1728,7 +1728,7 @@ void CMikie::Poke(ULONG addr,UBYTE data)
          TRACE_MIKIE2("Poke(AUD0SHFTB,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
          break;
       case (AUD0OUTVAL&0xff):
-         mAUDIO_OUTPUT[0]=data;
+         mAUDIO_OUTPUT_0=data;
          TRACE_MIKIE2("Poke(AUD0OUTVAL,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
          break;
       case (AUD0L8SHFT&0xff):
@@ -1793,7 +1793,7 @@ void CMikie::Poke(ULONG addr,UBYTE data)
          TRACE_MIKIE2("Poke(AUD1SHFTFB,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
          break;
       case (AUD1OUTVAL&0xff):
-         mAUDIO_OUTPUT[1]=data;
+         mAUDIO_OUTPUT_1=data;
          TRACE_MIKIE2("Poke(AUD1OUTVAL,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
          break;
       case (AUD1L8SHFT&0xff):
@@ -1858,7 +1858,7 @@ void CMikie::Poke(ULONG addr,UBYTE data)
          TRACE_MIKIE2("Poke(AUD2VSHFTFB,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
          break;
       case (AUD2OUTVAL&0xff):
-         mAUDIO_OUTPUT[2]=data;
+         mAUDIO_OUTPUT_2=data;
          TRACE_MIKIE2("Poke(AUD2OUTVAL,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
          break;
       case (AUD2L8SHFT&0xff):
@@ -1923,7 +1923,7 @@ void CMikie::Poke(ULONG addr,UBYTE data)
          TRACE_MIKIE2("Poke(AUD3SHFTFB,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
          break;
       case (AUD3OUTVAL&0xff):
-         mAUDIO_OUTPUT[3]=data;
+         mAUDIO_OUTPUT_3=data;
          TRACE_MIKIE2("Poke(AUD3OUTVAL,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
          break;
       case (AUD3L8SHFT&0xff):
@@ -1972,19 +1972,19 @@ void CMikie::Poke(ULONG addr,UBYTE data)
          break;
 
       case (ATTEN_A&0xff):
-            mAUDIO_ATTEN[0] = data;
+            mAUDIO_ATTEN_0 = data;
 			TRACE_MIKIE2("Poke(ATTEN_A ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
             break;
       case (ATTEN_B&0xff):
-            mAUDIO_ATTEN[1] = data;
+            mAUDIO_ATTEN_1 = data;
 			TRACE_MIKIE2("Poke(ATTEN_B ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
             break;
       case (ATTEN_C&0xff):
-            mAUDIO_ATTEN[2] = data;
+            mAUDIO_ATTEN_2 = data;
 			TRACE_MIKIE2("Poke(ATTEN_C ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
             break;
       case (ATTEN_D&0xff):
-            mAUDIO_ATTEN[3] = data;
+            mAUDIO_ATTEN_3 = data;
 			TRACE_MIKIE2("Poke(ATTEN_D ,%02x) at PC=%04x",data,mSystem.mCpu->GetPC());
             break;
       case (MPAN&0xff):
@@ -2497,8 +2497,8 @@ UBYTE CMikie::Peek(ULONG addr)
          TRACE_MIKIE2("Peek(AUD0SHFTFB,%02x) at PC=%04x",(UBYTE)(mAUDIO_0_WAVESHAPER>>13)&0xff,mSystem.mCpu->GetPC());
          return (UBYTE)((mAUDIO_0_WAVESHAPER>>13)&0xff);
       case (AUD0OUTVAL&0xff):
-         TRACE_MIKIE2("Peek(AUD0OUTVAL,%02x) at PC=%04x",(UBYTE)mAUDIO_OUTPUT[0],mSystem.mCpu->GetPC());
-         return (UBYTE)mAUDIO_OUTPUT[0];
+         TRACE_MIKIE2("Peek(AUD0OUTVAL,%02x) at PC=%04x",(UBYTE)mAUDIO_OUTPUT_0,mSystem.mCpu->GetPC());
+         return (UBYTE)mAUDIO_OUTPUT_0;
       case (AUD0L8SHFT&0xff):
          TRACE_MIKIE2("Peek(AUD0L8SHFT,%02x) at PC=%04x",(UBYTE)(mAUDIO_0_WAVESHAPER&0xff),mSystem.mCpu->GetPC());
          return (UBYTE)(mAUDIO_0_WAVESHAPER&0xff);
@@ -2537,8 +2537,8 @@ UBYTE CMikie::Peek(ULONG addr)
          TRACE_MIKIE2("Peek(AUD1SHFTFB,%02x) at PC=%04x",(UBYTE)(mAUDIO_1_WAVESHAPER>>13)&0xff,mSystem.mCpu->GetPC());
          return (UBYTE)((mAUDIO_1_WAVESHAPER>>13)&0xff);
       case (AUD1OUTVAL&0xff):
-         TRACE_MIKIE2("Peek(AUD1OUTVAL,%02x) at PC=%04x",(UBYTE)mAUDIO_OUTPUT[1],mSystem.mCpu->GetPC());
-         return (UBYTE)mAUDIO_OUTPUT[1];
+         TRACE_MIKIE2("Peek(AUD1OUTVAL,%02x) at PC=%04x",(UBYTE)mAUDIO_OUTPUT_1,mSystem.mCpu->GetPC());
+         return (UBYTE)mAUDIO_OUTPUT_1;
       case (AUD1L8SHFT&0xff):
          TRACE_MIKIE2("Peek(AUD1L8SHFT,%02x) at PC=%04x",(UBYTE)(mAUDIO_1_WAVESHAPER&0xff),mSystem.mCpu->GetPC());
          return (UBYTE)(mAUDIO_1_WAVESHAPER&0xff);
@@ -2577,8 +2577,8 @@ UBYTE CMikie::Peek(ULONG addr)
          TRACE_MIKIE2("Peek(AUD2SHFTFB,%02x) at PC=%04x",(UBYTE)(mAUDIO_2_WAVESHAPER>>13)&0xff,mSystem.mCpu->GetPC());
          return (UBYTE)((mAUDIO_2_WAVESHAPER>>13)&0xff);
       case (AUD2OUTVAL&0xff):
-         TRACE_MIKIE2("Peek(AUD2OUTVAL,%02x) at PC=%04x",(UBYTE)mAUDIO_OUTPUT[2],mSystem.mCpu->GetPC());
-         return (UBYTE)mAUDIO_OUTPUT[2];
+         TRACE_MIKIE2("Peek(AUD2OUTVAL,%02x) at PC=%04x",(UBYTE)mAUDIO_OUTPUT_2,mSystem.mCpu->GetPC());
+         return (UBYTE)mAUDIO_OUTPUT_2;
       case (AUD2L8SHFT&0xff):
          TRACE_MIKIE2("Peek(AUD2L8SHFT,%02x) at PC=%04x",(UBYTE)(mAUDIO_2_WAVESHAPER&0xff),mSystem.mCpu->GetPC());
          return (UBYTE)(mAUDIO_2_WAVESHAPER&0xff);
@@ -2617,8 +2617,8 @@ UBYTE CMikie::Peek(ULONG addr)
          TRACE_MIKIE2("Peek(AUD3SHFTFB,%02x) at PC=%04x",(UBYTE)(mAUDIO_3_WAVESHAPER>>13)&0xff,mSystem.mCpu->GetPC());
          return (UBYTE)((mAUDIO_3_WAVESHAPER>>13)&0xff);
       case (AUD3OUTVAL&0xff):
-         TRACE_MIKIE2("Peek(AUD3OUTVAL,%02x) at PC=%04x",(UBYTE)mAUDIO_OUTPUT[3],mSystem.mCpu->GetPC());
-         return (UBYTE)mAUDIO_OUTPUT[3];
+         TRACE_MIKIE2("Peek(AUD3OUTVAL,%02x) at PC=%04x",(UBYTE)mAUDIO_OUTPUT_3,mSystem.mCpu->GetPC());
+         return (UBYTE)mAUDIO_OUTPUT_3;
       case (AUD3L8SHFT&0xff):
          TRACE_MIKIE2("Peek(AUD3L8SHFT,%02x) at PC=%04x",(UBYTE)(mAUDIO_3_WAVESHAPER&0xff),mSystem.mCpu->GetPC());
          return (UBYTE)(mAUDIO_3_WAVESHAPER&0xff);
@@ -2652,16 +2652,16 @@ UBYTE CMikie::Peek(ULONG addr)
 
       case (ATTEN_A&0xff):
             TRACE_MIKIE1("Peek(ATTEN_A) at PC=%04x",mSystem.mCpu->GetPC());
-            return (UBYTE) mAUDIO_ATTEN[0];
+            return (UBYTE) mAUDIO_ATTEN_0;
       case (ATTEN_B&0xff):
             TRACE_MIKIE1("Peek(ATTEN_B) at PC=%04x",mSystem.mCpu->GetPC());
-            return (UBYTE) mAUDIO_ATTEN[1];
+            return (UBYTE) mAUDIO_ATTEN_1;
       case (ATTEN_C&0xff):
             TRACE_MIKIE1("Peek(ATTEN_C) at PC=%04x",mSystem.mCpu->GetPC());
-            return (UBYTE) mAUDIO_ATTEN[2];
+            return (UBYTE) mAUDIO_ATTEN_2;
       case (ATTEN_D&0xff):
             TRACE_MIKIE1("Peek(ATTEN_D) at PC=%04x",mSystem.mCpu->GetPC());
-            return (UBYTE) mAUDIO_ATTEN[3];
+            return (UBYTE) mAUDIO_ATTEN_3;
       case (MPAN&0xff):
             TRACE_MIKIE1("Peek(MPAN) at PC=%04x",mSystem.mCpu->GetPC());
             return (UBYTE) mPAN;
@@ -3728,15 +3728,15 @@ inline void CMikie::Update(void)
 
                      if(mAUDIO_0_INTEGRATE_ENABLE)
                      {
-								SLONG temp=mAUDIO_OUTPUT[0];
+								SLONG temp=mAUDIO_OUTPUT_0;
                         if(mAUDIO_0_WAVESHAPER&0x0001) temp+=mAUDIO_0_VOLUME; else temp-=mAUDIO_0_VOLUME;
                         if(temp>127) temp=127;
                         if(temp<-128) temp=-128;
-								mAUDIO_OUTPUT[0]=(SBYTE)temp;
+								mAUDIO_OUTPUT_0=(SBYTE)temp;
                      }
                      else
                      {
-								if(mAUDIO_0_WAVESHAPER&0x0001) mAUDIO_OUTPUT[0]=mAUDIO_0_VOLUME; else mAUDIO_OUTPUT[0]=-mAUDIO_0_VOLUME;
+								if(mAUDIO_0_WAVESHAPER&0x0001) mAUDIO_OUTPUT_0=mAUDIO_0_VOLUME; else mAUDIO_OUTPUT_0=-mAUDIO_0_VOLUME;
                      }
                   }
                   else
@@ -3825,15 +3825,15 @@ inline void CMikie::Update(void)
 
                      if(mAUDIO_1_INTEGRATE_ENABLE)
                      {
-								SLONG temp=mAUDIO_OUTPUT[1];
+								SLONG temp=mAUDIO_OUTPUT_1;
                         if(mAUDIO_1_WAVESHAPER&0x0001) temp+=mAUDIO_1_VOLUME; else temp-=mAUDIO_1_VOLUME;
                         if(temp>127) temp=127;
                         if(temp<-128) temp=-128;
-								mAUDIO_OUTPUT[1]=(SBYTE)temp;
+								mAUDIO_OUTPUT_1=(SBYTE)temp;
                      }
                      else
                      {
-								if(mAUDIO_1_WAVESHAPER&0x0001) mAUDIO_OUTPUT[1]=mAUDIO_1_VOLUME; else mAUDIO_OUTPUT[1]=-mAUDIO_1_VOLUME;
+								if(mAUDIO_1_WAVESHAPER&0x0001) mAUDIO_OUTPUT_1=mAUDIO_1_VOLUME; else mAUDIO_OUTPUT_1=-mAUDIO_1_VOLUME;
                      }
                   }
                   else
@@ -3922,15 +3922,15 @@ inline void CMikie::Update(void)
 
                      if(mAUDIO_2_INTEGRATE_ENABLE)
                      {
-								SLONG temp=mAUDIO_OUTPUT[2];
+								SLONG temp=mAUDIO_OUTPUT_2;
                         if(mAUDIO_2_WAVESHAPER&0x0001) temp+=mAUDIO_2_VOLUME; else temp-=mAUDIO_2_VOLUME;
                         if(temp>127) temp=127;
                         if(temp<-128) temp=-128;
-								mAUDIO_OUTPUT[2]=(SBYTE)temp;
+								mAUDIO_OUTPUT_2=(SBYTE)temp;
                      }
                      else
                      {
-								if(mAUDIO_2_WAVESHAPER&0x0001) mAUDIO_OUTPUT[2]=mAUDIO_2_VOLUME; else mAUDIO_OUTPUT[2]=-mAUDIO_2_VOLUME;
+								if(mAUDIO_2_WAVESHAPER&0x0001) mAUDIO_OUTPUT_2=mAUDIO_2_VOLUME; else mAUDIO_OUTPUT_2=-mAUDIO_2_VOLUME;
                      }
                   }
                   else
@@ -4019,15 +4019,15 @@ inline void CMikie::Update(void)
 
                      if(mAUDIO_3_INTEGRATE_ENABLE)
                      {
-								SLONG temp=mAUDIO_OUTPUT[3];
+								SLONG temp=mAUDIO_OUTPUT_3;
                         if(mAUDIO_3_WAVESHAPER&0x0001) temp+=mAUDIO_3_VOLUME; else temp-=mAUDIO_3_VOLUME;
                         if(temp>127) temp=127;
                         if(temp<-128) temp=-128;
-								mAUDIO_OUTPUT[3]=(SBYTE)temp;
+								mAUDIO_OUTPUT_3=(SBYTE)temp;
                      }
                      else
                      {
-								if(mAUDIO_3_WAVESHAPER&0x0001) mAUDIO_OUTPUT[3]=mAUDIO_3_VOLUME; else mAUDIO_OUTPUT[3]=-mAUDIO_3_VOLUME;
+								if(mAUDIO_3_WAVESHAPER&0x0001) mAUDIO_OUTPUT_3=mAUDIO_3_VOLUME; else mAUDIO_OUTPUT_3=-mAUDIO_3_VOLUME;
                      }
                   }
                   else
@@ -4076,7 +4076,136 @@ inline void CMikie::Update(void)
          gSystemCycleCount+=mikie_work_done;
       }
 
-#ifdef MY_AUDIO_MODE_V1
+#ifndef MY_AUDIO_MODE
+inline void CMikie::UpdateSound(void)
+{
+          int count = (gSystemCycleCount-gAudioLastUpdateCycle)/HANDY_AUDIO_SAMPLE_PERIOD;
+          if (count == 0) return;
+    
+          gAudioLastUpdateCycle+=count*HANDY_AUDIO_SAMPLE_PERIOD;
+          
+          int cur_lsample = 0;
+          int cur_rsample = 0;
+          int x;
+          
+          AUDIO_CALC(0, mAUDIO_OUTPUT_0, mAUDIO_ATTEN_0)
+          AUDIO_CALC(1, mAUDIO_OUTPUT_1, mAUDIO_ATTEN_1)
+          AUDIO_CALC(2, mAUDIO_OUTPUT_2, mAUDIO_ATTEN_2)
+          AUDIO_CALC(3, mAUDIO_OUTPUT_3, mAUDIO_ATTEN_3)
+/*
+          for(x = 0; x < 4; x++){
+              /// Assumption (seems there is no documentation for the Attenuation registers)
+              /// a) they are linear from $0 to $f - checked!
+              /// b) an attenuation of $0 is equal to channel OFF (bits in mSTEREO not set) - checked!
+              /// c) an attenuation of $f is NOT equal to no attenuation (bits in PAN not set), $10 would be - checked!
+              /// These assumptions can only checked with an oszilloscope... - done
+              /// the values stored in mSTEREO are bit-inverted ...
+              /// mSTEREO was found to be set like that already (why?), but unused
+
+              if(!(mSTEREO & (0x10 << x)))
+              {
+                if(mPAN & (0x10 << x))
+                  cur_lsample += (mAUDIO_OUTPUT[x]*(mAUDIO_ATTEN[x]&0xF0))/(16*16); /// NOT /15*16 see remark above
+                else
+                  cur_lsample += mAUDIO_OUTPUT[x];
+              }
+              if(!(mSTEREO & (0x01 << x)))
+              {
+                if(mPAN & (0x01 << x))
+                  cur_rsample += (mAUDIO_OUTPUT[x]*(mAUDIO_ATTEN[x]&0x0F))/16; /// NOT /15 see remark above
+                else
+                  cur_rsample += mAUDIO_OUTPUT[x];
+              }
+            }
+            */
+
+        // Upsample to 16 bit signed
+        SWORD sample_l, sample_r;
+        sample_l= (cur_lsample<<5); // koennte auch 6 sein
+        sample_r= (cur_rsample<<5); // keep cool
+        
+        
+                                
+            for(;gAudioLastUpdateCycle+HANDY_AUDIO_SAMPLE_PERIOD<gSystemCycleCount;gAudioLastUpdateCycle+=HANDY_AUDIO_SAMPLE_PERIOD)
+            {
+               // Output audio sample
+                // Stereo 16 bit signed
+                    *(SWORD *) &(gAudioBuffer[gAudioBufferPointer])=sample_l;
+                    *(SWORD *) &(gAudioBuffer[gAudioBufferPointer+2])=sample_r;
+                    gAudioBufferPointer+=4;
+
+                // Check buffer overflow condition, stick at the endpoint
+               // teh audio output system will reset the input pointer
+               // when it reads out the data.
+
+               // We should NEVER overflow, this buffer holds 0.25 seconds
+               // of data if this happens the the multimedia system above
+               // has failed so the corruption of the buffer contents wont matter
+
+               gAudioBufferPointer%=HANDY_AUDIO_BUFFER_SIZE;
+            }
+}
+/*
+inline void CMikie::UpdateSound(void)
+{
+          int cur_lsample = 0;
+          int cur_rsample = 0;
+                                int x;
+
+          for(x = 0; x < 4; x++){
+              /// Assumption (seems there is no documentation for the Attenuation registers)
+              /// a) they are linear from $0 to $f - checked!
+              /// b) an attenuation of $0 is equal to channel OFF (bits in mSTEREO not set) - checked!
+              /// c) an attenuation of $f is NOT equal to no attenuation (bits in PAN not set), $10 would be - checked!
+              /// These assumptions can only checked with an oszilloscope... - done
+              /// the values stored in mSTEREO are bit-inverted ...
+              /// mSTEREO was found to be set like that already (why?), but unused
+
+              if(!(mSTEREO & (0x10 << x)))
+              {
+                if(mPAN & (0x10 << x))
+                  cur_lsample += (mAUDIO_OUTPUT[x]*(mAUDIO_ATTEN[x]&0xF0))/(16*16); /// NOT /15*16 see remark above
+                else
+                  cur_lsample += mAUDIO_OUTPUT[x];
+              }
+              if(!(mSTEREO & (0x01 << x)))
+              {
+                if(mPAN & (0x01 << x))
+                  cur_rsample += (mAUDIO_OUTPUT[x]*(mAUDIO_ATTEN[x]&0x0F))/16; /// NOT /15 see remark above
+                else
+                  cur_rsample += mAUDIO_OUTPUT[x];
+              }
+            }
+
+        // Upsample to 16 bit signed
+        SWORD sample_l, sample_r;
+        sample_l= (cur_lsample<<5); // koennte auch 6 sein
+        sample_r= (cur_rsample<<5); // keep cool
+        
+        
+                                
+            for(;gAudioLastUpdateCycle+HANDY_AUDIO_SAMPLE_PERIOD<gSystemCycleCount;gAudioLastUpdateCycle+=HANDY_AUDIO_SAMPLE_PERIOD)
+            {
+               // Output audio sample
+                // Stereo 16 bit signed
+                    *(SWORD *) &(gAudioBuffer[gAudioBufferPointer])=sample_l;
+                    *(SWORD *) &(gAudioBuffer[gAudioBufferPointer+2])=sample_r;
+                    gAudioBufferPointer+=4;
+
+                // Check buffer overflow condition, stick at the endpoint
+               // teh audio output system will reset the input pointer
+               // when it reads out the data.
+
+               // We should NEVER overflow, this buffer holds 0.25 seconds
+               // of data if this happens the the multimedia system above
+               // has failed so the corruption of the buffer contents wont matter
+
+               gAudioBufferPointer%=HANDY_AUDIO_BUFFER_SIZE;
+            }
+}
+*/
+#else
+#if MY_AUDIO_MODE==1
 inline void CMikie::UpdateSound(void)
 {
     int count = (gSystemCycleCount-gAudioLastUpdateCycle)/HANDY_AUDIO_SAMPLE_PERIOD;
@@ -4215,54 +4344,55 @@ inline void CMikie::UpdateSound(void)
        }
        */           
 }
+#endif
+#if MY_AUDIO_MODE==2
 
-#else
+#define AUDIO_CALC(x, audio_out, audio_atten) \
+              if(!(mSTEREO & (0x10 << x))) \
+              { \
+                if(mPAN & (0x10 << x)) \
+                  cur_lsample += (audio_out*(audio_atten&0xF0))/(16*16); \
+                else \
+                  cur_lsample += audio_out; \
+              } \
+              if(!(mSTEREO & (0x01 << x))) \
+              { \
+                if(mPAN & (0x01 << x)) \
+                  cur_rsample += (audio_out*(audio_atten&0x0F))/16; \
+                else \
+                  cur_rsample += audio_out; \
+              }
 
 inline void CMikie::UpdateSound(void)
 {
+          int count = (gSystemCycleCount-gAudioLastUpdateCycle)/HANDY_AUDIO_SAMPLE_PERIOD;
+          if (count == 0) return;
+    
+          gAudioLastUpdateCycle+=count*HANDY_AUDIO_SAMPLE_PERIOD;
+          
           int cur_lsample = 0;
           int cur_rsample = 0;
-                                int x;
+          int x;
+          
+          AUDIO_CALC(0, mAUDIO_OUTPUT_0, mAUDIO_ATTEN_0)
+          AUDIO_CALC(1, mAUDIO_OUTPUT_1, mAUDIO_ATTEN_1)
+          AUDIO_CALC(2, mAUDIO_OUTPUT_2, mAUDIO_ATTEN_2)
+          AUDIO_CALC(3, mAUDIO_OUTPUT_3, mAUDIO_ATTEN_3)
 
-          for(x = 0; x < 4; x++){
-              /// Assumption (seems there is no documentation for the Attenuation registers)
-              /// a) they are linear from $0 to $f - checked!
-              /// b) an attenuation of $0 is equal to channel OFF (bits in mSTEREO not set) - checked!
-              /// c) an attenuation of $f is NOT equal to no attenuation (bits in PAN not set), $10 would be - checked!
-              /// These assumptions can only checked with an oszilloscope... - done
-              /// the values stored in mSTEREO are bit-inverted ...
-              /// mSTEREO was found to be set like that already (why?), but unused
-
-              if(!(mSTEREO & (0x10 << x)))
-              {
-                if(mPAN & (0x10 << x))
-                  cur_lsample += (mAUDIO_OUTPUT[x]*(mAUDIO_ATTEN[x]&0xF0))/(16*16); /// NOT /15*16 see remark above
-                else
-                  cur_lsample += mAUDIO_OUTPUT[x];
-              }
-              if(!(mSTEREO & (0x01 << x)))
-              {
-                if(mPAN & (0x01 << x))
-                  cur_rsample += (mAUDIO_OUTPUT[x]*(mAUDIO_ATTEN[x]&0x0F))/16; /// NOT /15 see remark above
-                else
-                  cur_rsample += mAUDIO_OUTPUT[x];
-              }
-            }
-
-		// Upsample to 16 bit signed
-		SWORD sample_l, sample_r;
-		sample_l= (cur_lsample<<5); // koennte auch 6 sein
-		sample_r= (cur_rsample<<5); // keep cool
-		
-		
-		                        
-            for(;gAudioLastUpdateCycle+HANDY_AUDIO_SAMPLE_PERIOD<gSystemCycleCount;gAudioLastUpdateCycle+=HANDY_AUDIO_SAMPLE_PERIOD)
+        // Upsample to 16 bit signed
+        SWORD sample_l, sample_r;
+        sample_l= (cur_lsample<<5); // koennte auch 6 sein
+        sample_r= (cur_rsample<<5); // keep cool
+        ULONG value = (((ULONG)sample_l) << 16) | ((ULONG)sample_r)&0x0000FFFF;
+        
+            for(;count>0;count--)                    
             {
                // Output audio sample
                 // Stereo 16 bit signed
-					*(SWORD *) &(gAudioBuffer[gAudioBufferPointer])=sample_l;
-					*(SWORD *) &(gAudioBuffer[gAudioBufferPointer+2])=sample_r;
-					gAudioBufferPointer+=4;
+                //*(SWORD *) &(gAudioBuffer[gAudioBufferPointer])=sample_l;
+                //*(SWORD *) &(gAudioBuffer[gAudioBufferPointer+2])=sample_r;
+                *(ULONG *) &(gAudioBuffer[gAudioBufferPointer])=value;
+                gAudioBufferPointer+=4;
 
                 // Check buffer overflow condition, stick at the endpoint
                // teh audio output system will reset the input pointer
@@ -4275,4 +4405,6 @@ inline void CMikie::UpdateSound(void)
                gAudioBufferPointer%=HANDY_AUDIO_BUFFER_SIZE;
             }
 }
+
+#endif
 #endif
