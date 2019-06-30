@@ -3,6 +3,15 @@
 
 #include <stdlib.h>
 
+// 65 -> 72 fps
+#define MY_NO_STATIC
+// 63 -> 65 fps
+#define MY_KEYS_IN_CALLBACK
+//#define MY_KEYS
+
+#define MY_RETRO_LOOP
+#define MY_KEYS_IN_VIDEO
+
 // 1: Is correct
 //#define MY_SYSTEM_LOOP 1
 // 2: Not correct

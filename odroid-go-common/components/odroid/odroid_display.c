@@ -1185,9 +1185,205 @@ typedef struct
    };
 }TPALETTE;
 
-void ili9341_write_frame_lynx_v2(uint8_t* buffer, uint32_t* myPalette, uint8_t scale)
+void ili9341_write_frame_lynx_v2_original(uint8_t* buffer, uint32_t* myPalette)
 {
+    uint8_t* framePtr = buffer;
+    TPALETTE    *mPaletteInLine;
     short x, y;
+   send_reset_drawing((320 / 2) - (LYNX_GAME_WIDTH / 2), (240 / 2) - (LYNX_GAME_HEIGHT / 2), LYNX_GAME_WIDTH, LYNX_GAME_HEIGHT);
+    for (y = 0; y < LYNX_GAME_HEIGHT; y += LINE_COUNT)
+    {
+      int linesWritten = 0;
+      uint16_t* line_buffer = line_buffer_get();
+
+      for (short i = 0; i < LINE_COUNT; ++i)
+      {
+          if((y + i) >= LYNX_GAME_HEIGHT)
+            break;
+          mPaletteInLine = framePtr;
+          framePtr+=64;
+          int index = (i) * LYNX_GAME_WIDTH;
+
+          for (x = 0; x < LYNX_GAME_WIDTH/2; ++x)
+          {
+            uint8_t source=*framePtr;
+            framePtr++;
+            uint16_t value1 = myPalette[mPaletteInLine[source>>4].Index];
+            uint16_t value2 = myPalette[mPaletteInLine[source&0x0f].Index];
+            //uint16_t value1 = mPaletteInLine[source>>4].Index;
+            //uint16_t value2 = mPaletteInLine[source&0x0f].Index;
+             
+            line_buffer[index++] = value1;
+            line_buffer[index++] = value2;
+            //line_buffer[index++] = source>>4;
+            //line_buffer[index++] = source&0x0f;
+          }
+
+          ++linesWritten;
+      }
+
+      // display
+      send_continue_line(line_buffer, LYNX_GAME_WIDTH, linesWritten);
+    }
+}
+
+// 2x2
+void ili9341_write_frame_lynx_v2_mode0(uint8_t* buffer, uint32_t* myPalette) {
+    uint8_t* framePtr = buffer;
+    TPALETTE    *mPaletteInLine;
+    uint16_t x, y;
+    send_reset_drawing(0, /*(240-102*2)/2*/ 18, LYNX_GAME_WIDTH*2, LYNX_GAME_HEIGHT*2);
+    for (y = 0; y < LYNX_GAME_HEIGHT; y += 2)
+    {
+      uint16_t* line_buffer = line_buffer_get();
+      uint16_t* line_buffer_ptr = line_buffer; 
+      for (short i = 0; i < 2; ++i) // LINE_COUNT
+      {
+          int index = (i*2) * LYNX_GAME_WIDTH*2;
+          mPaletteInLine = framePtr;
+          framePtr+=64;
+          for (x = 0; x < LYNX_GAME_WIDTH / 2; ++x)
+          {
+            uint8_t source=*framePtr;
+            framePtr++;
+            uint16_t value1 = myPalette[mPaletteInLine[source>>4].Index];
+            uint16_t value2 = myPalette[mPaletteInLine[source&0x0f].Index];
+            
+            line_buffer[index] = value1;
+            line_buffer[index+1] = value1;
+            line_buffer[index+LYNX_GAME_WIDTH*2] = value1;
+            line_buffer[index+LYNX_GAME_WIDTH*2+1] = value1;
+            index+=2;
+            line_buffer[index] = value2;
+            line_buffer[index+1] = value2;
+            line_buffer[index+LYNX_GAME_WIDTH*2] = value2;
+            line_buffer[index+LYNX_GAME_WIDTH*2+1] = value2;
+            index+=2;
+          }
+      }
+      send_continue_line(line_buffer, LYNX_GAME_WIDTH*2, 4);
+    }
+}
+
+// 2x1
+void ili9341_write_frame_lynx_v2_mode1(uint8_t* buffer, uint32_t* myPalette) {
+    uint8_t* framePtr = buffer;
+    TPALETTE    *mPaletteInLine;
+    short x, y;
+    const uint16_t displayWidth = 320;        
+    send_reset_drawing(0, /*(240-102*2)/2*/ 18, displayWidth, LYNX_GAME_HEIGHT*2);
+    for (y = 0; y < LYNX_GAME_HEIGHT; y += 2)
+    {
+      uint16_t* line_buffer = line_buffer_get();
+      uint16_t* line_buffer_ptr = line_buffer; 
+      for (short i = 0; i < 2; ++i) // LINE_COUNT
+      {
+          int index = (i*2) * displayWidth;
+          mPaletteInLine = framePtr;
+          framePtr+=64;
+          for (x = 0; x < LYNX_GAME_WIDTH / 2; ++x)
+          {
+            uint8_t source=*framePtr;
+            framePtr++;
+            uint16_t value1 = myPalette[mPaletteInLine[source>>4].Index];
+            uint16_t value2 = myPalette[mPaletteInLine[source&0x0f].Index];
+            
+            line_buffer[index] = value1;
+            line_buffer[index+1] = value1;
+            //line_buffer[index+displayWidth] = value1;
+            //line_buffer[index+displayWidth+1] = value1;
+            index+=2;
+            line_buffer[index] = value2;
+            line_buffer[index+1] = value2;
+            //line_buffer[index+displayWidth] = value2;
+            //line_buffer[index+displayWidth+1] = value2;
+            index+=2;
+          }
+      }
+      send_continue_line(line_buffer, displayWidth, 4);
+    }
+}
+
+// 1x2
+void ili9341_write_frame_lynx_v2_mode2(uint8_t* buffer, uint32_t* myPalette) {
+    uint8_t* framePtr = buffer;
+    TPALETTE    *mPaletteInLine;
+    short x, y;
+    const uint16_t displayWidth = 320;        
+    send_reset_drawing(0, /*(240-102*2)/2*/ 18, displayWidth, LYNX_GAME_HEIGHT*2);
+    for (y = 0; y < LYNX_GAME_HEIGHT; y += 2)
+    {
+      uint16_t* line_buffer = line_buffer_get();
+      uint16_t* line_buffer_ptr = line_buffer; 
+      for (short i = 0; i < 2; ++i) // LINE_COUNT
+      {
+          int index = (i*2) * displayWidth;
+          mPaletteInLine = framePtr;
+          framePtr+=64;
+          for (x = 0; x < LYNX_GAME_WIDTH / 2; ++x)
+          {
+            uint8_t source=*framePtr;
+            framePtr++;
+            uint16_t value1 = myPalette[mPaletteInLine[source>>4].Index];
+            uint16_t value2 = myPalette[mPaletteInLine[source&0x0f].Index];
+            
+            line_buffer[index] = value1;
+            //line_buffer[index+1] = value1;
+            line_buffer[index+displayWidth] = value1;
+            //line_buffer[index+displayWidth+1] = value1;
+            index+=2;
+            line_buffer[index] = value2;
+            //line_buffer[index+1] = value2;
+            line_buffer[index+displayWidth] = value2;
+            //line_buffer[index+displayWidth+1] = value2;
+            index+=2;
+          }
+      }
+      send_continue_line(line_buffer, displayWidth, 4);
+    }
+}
+
+// 1x1
+void ili9341_write_frame_lynx_v2_mode3(uint8_t* buffer, uint32_t* myPalette) {
+    uint8_t* framePtr = buffer;
+    TPALETTE    *mPaletteInLine;
+    short x, y;
+    const uint16_t displayWidth = 320;        
+    send_reset_drawing(0, /*(240-102*2)/2*/ 18, displayWidth, LYNX_GAME_HEIGHT*2);
+    for (y = 0; y < LYNX_GAME_HEIGHT; y += 2)
+    {
+      uint16_t* line_buffer = line_buffer_get();
+      uint16_t* line_buffer_ptr = line_buffer; 
+      for (short i = 0; i < 2; ++i) // LINE_COUNT
+      {
+          int index = (i*2) * displayWidth;
+          mPaletteInLine = framePtr;
+          framePtr+=64;
+          for (x = 0; x < LYNX_GAME_WIDTH / 2; ++x)
+          {
+            uint8_t source=*framePtr;
+            framePtr++;
+            uint16_t value1 = myPalette[mPaletteInLine[source>>4].Index];
+            uint16_t value2 = myPalette[mPaletteInLine[source&0x0f].Index];
+            
+            line_buffer[index] = value1;
+            //line_buffer[index+1] = value1;
+            //line_buffer[index+displayWidth] = value1;
+            //line_buffer[index+displayWidth+1] = value1;
+            index+=2;
+            line_buffer[index] = value2;
+            //line_buffer[index+1] = value2;
+            //line_buffer[index+displayWidth] = value2;
+            //line_buffer[index+displayWidth+1] = value2;
+            index+=2;
+          }
+      }
+      send_continue_line(line_buffer, displayWidth, 4);
+    }
+}
+
+void ili9341_write_frame_lynx_v2(uint8_t* buffer, uint32_t* myPalette, uint8_t scale, uint8_t filtering)
+{
     odroid_display_lock();
     //xTaskToNotify = xTaskGetCurrentTaskHandle();
     
@@ -1202,7 +1398,7 @@ void ili9341_write_frame_lynx_v2(uint8_t* buffer, uint32_t* myPalette, uint8_t s
         // clear the screen
         send_reset_drawing(0, 0, 320, 240);
 
-        for (y = 0; y < 240; y += LINE_COUNT)
+        for (short y = 0; y < 240; y += LINE_COUNT)
         {
             uint16_t* line_buffer = line_buffer_get();
             send_continue_line(line_buffer, 320, LINE_COUNT);
@@ -1210,90 +1406,26 @@ void ili9341_write_frame_lynx_v2(uint8_t* buffer, uint32_t* myPalette, uint8_t s
     }
     else
     {
-        uint8_t* framePtr = buffer;
-        TPALETTE    *mPaletteInLine;
-        
-        //scale = 0;
-
         if (scale)
         {
-            const uint16_t displayWidth = 320;
-            
-            send_reset_drawing(0, /*(240-102*2)/2*/ 18, displayWidth, LYNX_GAME_HEIGHT*2);
-
-            for (y = 0; y < LYNX_GAME_HEIGHT; y += 2)
-            {
-              uint16_t* line_buffer = line_buffer_get();
-              uint16_t* line_buffer_ptr = line_buffer; 
-              for (short i = 0; i < 2; ++i) // LINE_COUNT
-              {
-                  int index = (i*2) * displayWidth;
-
-                  mPaletteInLine = framePtr;
-                  framePtr+=64;
-
-                  for (x = 0; x < LYNX_GAME_WIDTH / 2; ++x)
-                  {
-                    uint8_t source=*framePtr;
-                    framePtr++;
-                    uint16_t value1 = myPalette[mPaletteInLine[source>>4].Index];
-                    uint16_t value2 = myPalette[mPaletteInLine[source&0x0f].Index];
-                    
-                    line_buffer[index] = value1;
-                    line_buffer[index+1] = value1;
-                    line_buffer[index+displayWidth] = value1;
-                    line_buffer[index+displayWidth+1] = value1;
-                    index+=2;
-                    line_buffer[index] = value2;
-                    line_buffer[index+1] = value2;
-                    line_buffer[index+displayWidth] = value2;
-                    line_buffer[index+displayWidth+1] = value2;
-                    index+=2;
-                  }
-              }
-              // display
-              send_continue_line(line_buffer, displayWidth, 4);
+            switch (filtering) {
+            case 0:
+                ili9341_write_frame_lynx_v2_mode0(buffer, myPalette);
+            break;
+            case 1:
+                ili9341_write_frame_lynx_v2_mode1(buffer, myPalette);
+            break;
+            case 2:
+                ili9341_write_frame_lynx_v2_mode2(buffer, myPalette);
+            break;
+            case 3:
+                ili9341_write_frame_lynx_v2_mode3(buffer, myPalette);
+            break;  
             }
         }
         else
         {
-            send_reset_drawing((320 / 2) - (LYNX_GAME_WIDTH / 2), (240 / 2) - (LYNX_GAME_HEIGHT / 2), LYNX_GAME_WIDTH, LYNX_GAME_HEIGHT);
-
-            for (y = 0; y < LYNX_GAME_HEIGHT; y += LINE_COUNT)
-            {
-              int linesWritten = 0;
-              uint16_t* line_buffer = line_buffer_get();
-
-              for (short i = 0; i < LINE_COUNT; ++i)
-              {
-                  if((y + i) >= LYNX_GAME_HEIGHT)
-                    break;
-                  mPaletteInLine = framePtr;
-                  framePtr+=64;
-                  int index = (i) * LYNX_GAME_WIDTH;
-
-                  for (x = 0; x < LYNX_GAME_WIDTH/2; ++x)
-                  {
-                    uint8_t source=*framePtr;
-                    framePtr++;
-                    uint16_t value1 = myPalette[mPaletteInLine[source>>4].Index];
-                    uint16_t value2 = myPalette[mPaletteInLine[source&0x0f].Index];
-                    //uint16_t value1 = mPaletteInLine[source>>4].Index;
-                    //uint16_t value2 = mPaletteInLine[source&0x0f].Index;
-                     
-                    line_buffer[index++] = value1;
-                    line_buffer[index++] = value2;
-                    //line_buffer[index++] = source>>4;
-                    //line_buffer[index++] = source&0x0f;
-                  }
-
-                  ++linesWritten;
-              }
-
-              // display
-              send_continue_line(line_buffer, LYNX_GAME_WIDTH, linesWritten);
-              // break;
-            }
+            ili9341_write_frame_lynx_v2_original(buffer, myPalette);
         }
     }
 

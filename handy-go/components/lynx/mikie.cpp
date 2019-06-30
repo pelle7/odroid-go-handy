@@ -349,9 +349,13 @@ ULONG CMikie::GetLfsrNext(ULONG current)
    //
    // If the index is a combination of Current LFSR+Feedback the
    // table will give the next value.
-
+#ifdef MY_NO_STATIC
+   ULONG switches,lfsr,next,swloop,result;
+   ULONG switchbits[9]={7,0,1,2,3,4,5,10,11};
+#else
    static ULONG switches,lfsr,next,swloop,result;
    static ULONG switchbits[9]={7,0,1,2,3,4,5,10,11};
+#endif
 
    switches=current>>12;
    lfsr=current&0xfff;

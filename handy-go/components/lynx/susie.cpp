@@ -170,6 +170,10 @@ void CSusie::Reset(void)
 
    mJOYSTICK.Byte=0;
    mSWITCHES.Byte=0;
+#ifdef MY_NO_STATIC
+  vquadoff = 0;
+  hquadoff = 0;
+#endif
 }
 
 bool CSusie::ContextSave(FILE *fp)
@@ -675,7 +679,10 @@ ULONG CSusie::PaintSprites(void)
          bool superclip=FALSE;
          int quadrant=0;
          int hsign,vsign;
-
+#ifdef MY_NO_STATIC
+         int vquadflip[4]={1,0,3,2};
+         int hquadflip[4]={3,2,1,0};
+#endif
          if(mSPRCTL1_StartLeft)
          {
             if(mSPRCTL1_StartUp) quadrant=2; else quadrant=3;
@@ -757,9 +764,11 @@ ULONG CSusie::PaintSprites(void)
                // the hflip, vflip bits & negative tilt to be able to work correctly
                //
                int	modquad=quadrant;
+#ifndef MY_NO_STATIC
                static int vquadflip[4]={1,0,3,2};
                static int hquadflip[4]={3,2,1,0};
-
+#endif
+               
                if(mSPRCTL0_Vflip) modquad=vquadflip[modquad];
                if(mSPRCTL0_Hflip) modquad=hquadflip[modquad];
 
@@ -790,7 +799,14 @@ ULONG CSusie::PaintSprites(void)
             // Is this quad to be rendered ??
 
             TRACE_SUSIE1("PaintSprites() Render status %d",render);
-
+#ifdef MY_NO_STATIC
+             int pixel_height=0;
+             int pixel_width=0;
+             int pixel=0;
+             int hoff=0,voff=0;
+             int hloop=0,vloop=0;
+             bool onscreen=0;
+#else
             static int pixel_height=0;
             static int pixel_width=0;
             static int pixel=0;
@@ -799,7 +815,8 @@ ULONG CSusie::PaintSprites(void)
             static bool onscreen=0;
             static int vquadoff=0;
             static int hquadoff=0;
-
+#endif
+             
             if(render)
             {
                // Set the vertical position & offset

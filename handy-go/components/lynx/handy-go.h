@@ -2124,6 +2124,7 @@ RETRO_API void retro_reset(void);
  * In this case, the video callback can take a NULL argument for data.
  */
 RETRO_API void retro_run(void);
+RETRO_API void retro_run_endless(void);
 
 /* Returns the amount of data the implementation requires to serialize 
  * internal state (save states).

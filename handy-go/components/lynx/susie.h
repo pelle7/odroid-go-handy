@@ -448,6 +448,10 @@ class CSusie : public CLynxBase
       ULONG		mLinePacketBitsLeft;
 
       int			mCollision;
+#ifdef MY_NO_STATIC
+      int vquadoff;
+      int hquadoff;
+#endif
 
       UBYTE		*mRamPointer;
 

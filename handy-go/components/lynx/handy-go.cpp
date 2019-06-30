@@ -19,22 +19,31 @@
 
 #define MAX_STR_LENGTH 160
 
-static retro_log_printf_t log_cb;
-static retro_video_refresh_t video_cb;
-static retro_audio_sample_batch_t audio_batch_cb;
-static retro_environment_t environ_cb;
-static retro_input_poll_t input_poll_cb;
-static retro_input_state_t input_state_cb;
+#ifdef MY_NO_STATIC
+#define VAR_S
+#define FUNC_S
+#else
+#define VAR_S static
+#define FUNC_S static
+#endif
 
-static CSystem *lynx = NULL;
+
+VAR_S retro_log_printf_t log_cb;
+VAR_S retro_video_refresh_t video_cb;
+VAR_S retro_audio_sample_batch_t audio_batch_cb;
+VAR_S retro_environment_t environ_cb;
+VAR_S retro_input_poll_t input_poll_cb;
+VAR_S retro_input_state_t input_state_cb;
+
+VAR_S CSystem *lynx = NULL;
 
 #define AUDIO_BUFFER_SIZE 1536
-static unsigned char *snd_buffer16s;
-//static unsigned short *soundBuffer; //soundBuffer[4096 * 8];
+VAR_S unsigned char *snd_buffer16s;
+//VAR_S unsigned short *soundBuffer; //soundBuffer[4096 * 8];
 
-static uint8_t lynx_rot = MIKIE_NO_ROTATE;
-static uint8_t lynx_width = 160;
-static uint8_t lynx_height = 102;
+VAR_S uint8_t lynx_rot = MIKIE_NO_ROTATE;
+VAR_S uint8_t lynx_width = 160;
+VAR_S uint8_t lynx_height = 102;
 
 #ifdef MY_VIDEO_MODE_V1
 #define VIDEO_CORE_PIXELSIZE    2 // MIKIE_PIXEL_FORMAT_16BPP_565
@@ -46,16 +55,16 @@ static uint8_t lynx_height = 102;
 #define VIDEO_CORE_PIXEL_FORMAT_16BPP MIKIE_PIXEL_FORMAT_16BPP_565_INV
 #endif
 
-//static uint16_t framebuffer[160*102*VIDEO_CORE_PIXELSIZE];
+//VAR_S uint16_t framebuffer[160*102*VIDEO_CORE_PIXELSIZE];
 extern uint16_t* framebuffer[2];
 uint8_t current_framebuffer = 0;
 
-static bool newFrame = false;
-static bool initialized = false;
+VAR_S bool newFrame = false;
+VAR_S bool initialized = false;
 
 struct map { unsigned retro; unsigned lynx; };
 
-static map btn_map_no_rot[] = {
+VAR_S map btn_map_no_rot[] = {
    { RETRO_DEVICE_ID_JOYPAD_A, BUTTON_A },
    { RETRO_DEVICE_ID_JOYPAD_B, BUTTON_B },
    { RETRO_DEVICE_ID_JOYPAD_RIGHT, BUTTON_RIGHT },
@@ -67,7 +76,7 @@ static map btn_map_no_rot[] = {
    { RETRO_DEVICE_ID_JOYPAD_START, BUTTON_PAUSE },
 };
 
-static map btn_map_rot_270[] = {
+VAR_S map btn_map_rot_270[] = {
    { RETRO_DEVICE_ID_JOYPAD_A, BUTTON_A },
    { RETRO_DEVICE_ID_JOYPAD_B, BUTTON_B },
    { RETRO_DEVICE_ID_JOYPAD_RIGHT, BUTTON_UP },
@@ -79,7 +88,7 @@ static map btn_map_rot_270[] = {
    { RETRO_DEVICE_ID_JOYPAD_START, BUTTON_PAUSE },
 };
 
-static map btn_map_rot_90[] = {
+VAR_S map btn_map_rot_90[] = {
    { RETRO_DEVICE_ID_JOYPAD_A, BUTTON_A },
    { RETRO_DEVICE_ID_JOYPAD_B, BUTTON_B },
    { RETRO_DEVICE_ID_JOYPAD_RIGHT, BUTTON_DOWN },
@@ -91,7 +100,7 @@ static map btn_map_rot_90[] = {
    { RETRO_DEVICE_ID_JOYPAD_START, BUTTON_PAUSE },
 };
 
-static map* btn_map;
+VAR_S map* btn_map;
 
 unsigned retro_api_version(void)
 {
@@ -166,13 +175,13 @@ void retro_deinit(void)
    }
 }
 
-void retro_set_environment(retro_environment_t cb)
-{
-   static const struct retro_variable vars[] = {
+VAR_S const struct retro_variable vars[] = {
       { "handy_rot", "Display rotation; None|90|270" },
       { NULL, NULL },
    };
 
+void retro_set_environment(retro_environment_t cb)
+{
    cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*)vars);
 
    environ_cb = cb;
@@ -202,7 +211,7 @@ void retro_set_video_refresh(retro_video_refresh_t cb)
    video_cb = cb;
 }
 
-static unsigned get_lynx_input(void)
+FUNC_S unsigned get_lynx_input(void)
 {
    unsigned i, res = 0;
    for (i = 0; i < sizeof(btn_map_no_rot) / sizeof(map); ++i)
@@ -210,13 +219,13 @@ static unsigned get_lynx_input(void)
    return res;
 }
 
-static void lynx_input(void)
+FUNC_S void lynx_input(void)
 {
    input_poll_cb();
    lynx->SetButtonData(get_lynx_input());
 }
 
-static bool lynx_initialize_sound(void)
+FUNC_S bool lynx_initialize_sound(void)
 {
    // gAudioEnabled = true;
    gAudioEnabled = false;
@@ -230,7 +239,7 @@ static bool lynx_initialize_sound(void)
    return true;
 }
 
-static int file_exists(const char *path)
+FUNC_S int file_exists(const char *path)
 {
    FILE *dummy = fopen(path, "rb");
 
@@ -241,7 +250,7 @@ static int file_exists(const char *path)
    return 1;
 }
 
-static bool lynx_romfilename(char *dest)
+FUNC_S bool lynx_romfilename(char *dest)
 {
    const char *dir = 0;
    
@@ -259,13 +268,12 @@ static bool lynx_romfilename(char *dest)
    return true;
 }
 
-static UBYTE* lynx_display_callback(ULONG objref)
+FUNC_S UBYTE* lynx_display_callback(ULONG objref)
 {
    if(!initialized)
       return (UBYTE*)framebuffer[0];
-   
+
    video_cb(framebuffer[current_framebuffer], lynx_width, lynx_height, 160*VIDEO_CORE_PIXELSIZE);
-   
    current_framebuffer = current_framebuffer ? 0 : 1;
 
    if(gAudioBufferPointer > 0)
@@ -285,12 +293,16 @@ static UBYTE* lynx_display_callback(ULONG objref)
 #endif
        gAudioBufferPointer = 0;
    }
-
+#ifndef MY_RETRO_LOOP
    newFrame = true;
+#endif
+#ifdef MY_KEYS_IN_VIDEO
+   lynx_input();
+#endif
    return (UBYTE*)framebuffer[current_framebuffer];
 }
 
-static void update_geometry()
+FUNC_S void update_geometry()
 {
    struct retro_system_av_info info;
 
@@ -298,7 +310,7 @@ static void update_geometry()
    environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info);
 }
 
-static void check_variables(void)
+FUNC_S void check_variables(void)
 {
    struct retro_variable var = {0};
 
@@ -344,7 +356,7 @@ static void check_variables(void)
    }
 }
 
-static bool lynx_initialize_system(const char* gamepath)
+FUNC_S bool lynx_initialize_system(const char* gamepath)
 {
    char romfilename[MAX_STR_LENGTH];
   printf("DEBUG-CC-001\n");
@@ -409,9 +421,24 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
    info->timing   = timing;
 }
 
+void retro_run_endless(void)
+{
+   while (true) {
+      lynx->Update();
+#ifndef MY_KEYS_IN_VIDEO
+      if (newFrame) {
+         lynx_input();
+         newFrame = false;
+      }
+#endif
+   }
+}
+
 void retro_run(void)
 {
+#ifndef MY_KEYS_IN_VIDEO
    lynx_input();
+#endif
 
    while (!newFrame) {
       lynx->Update();
@@ -435,7 +462,7 @@ void retro_run(void)
 */
 }
 
-static void gettempfilename(char *dest)
+FUNC_S void gettempfilename(char *dest)
 {
    const char *dir = 0;
    environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &dir);
@@ -470,9 +497,7 @@ bool retro_unserialize(const void *data, size_t size)
    return lynx->MemoryContextLoad((const char*)data, size);
 }
 
-bool retro_load_game(const struct retro_game_info *info)
-{
-   static struct retro_input_descriptor desc[] = {
+VAR_S struct retro_input_descriptor desc[] = {
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
@@ -486,6 +511,8 @@ bool retro_load_game(const struct retro_game_info *info)
       { 0 },
    };
 
+bool retro_load_game(const struct retro_game_info *info)
+{
    if (!info)
       return false;
 
