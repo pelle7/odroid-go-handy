@@ -78,8 +78,8 @@ class CMemMap : public CLynxBase
 
       void	Poke(ULONG addr,UBYTE data);
       UBYTE	Peek(ULONG addr);
-      ULONG	ReadCycle(void) {return 5;};
-      ULONG	WriteCycle(void) {return 5;};
+      //ULONG	ReadCycle(void) {return 5;};
+      //ULONG	WriteCycle(void) {return 5;};
       ULONG	ObjectSize(void) {return MEMMAP_SIZE;};
 
       // Data members

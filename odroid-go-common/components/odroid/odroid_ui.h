@@ -6,6 +6,7 @@
 #include "odroid_input.h"
 
 extern bool config_speedup;
+extern bool config_ui_stats;
 
 #ifndef ODROID_UI_CALLCONV
 #  if defined(__GNUC__) && defined(__i386__) && !defined(__x86_64__)
@@ -82,6 +83,8 @@ typedef struct odroid_ui_window
 bool odroid_ui_menu(bool restart_menu);
 bool odroid_ui_menu_ext(bool restart_menu, odroid_ui_func_window_init_def func_window_init);
 void odroid_ui_debug_enter_loop();
+void update_ui_fps_text(float fps);
+void odroid_ui_stats(uint16_t x, uint16_t y);
 
 void QuickSaveSetBuffer(void* data);
 

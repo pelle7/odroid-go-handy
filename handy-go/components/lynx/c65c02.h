@@ -47,6 +47,7 @@
 
 //#include <crtdbg.h>
 //#define	TRACE_CPU
+#include "myadd.h"
 
 #ifdef TRACE_CPU
 
@@ -1798,10 +1799,10 @@ class C65C02
       // Opcode prototypes
       //
 
-   private:
+   //private:
 
       // Answers value of the Processor Status register
-      int PS() const
+      inline int PS() const
       {
          UBYTE ps = 0x20;
          if(mN) ps|=0x80;
@@ -1816,7 +1817,7 @@ class C65C02
 
 
       // Change the processor flags to correspond to the given value
-      void PS(int ps)
+      inline void PS(int ps)
       {
          mN=ps&0x80;
          mV=ps&0x40;

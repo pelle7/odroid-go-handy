@@ -72,6 +72,7 @@ odroid_volume_level Volume;
 odroid_battery_state battery;
 
 bool scaling_enabled = true;
+bool config_ui_stats = false;
 int8_t filtering = 0;
 bool previous_scaling_enabled = true;
 uint8_t previous_filtering = 0;
@@ -88,6 +89,7 @@ uint startTime;
 uint stopTime;
 uint totalElapsedTime;
 int frame;
+volatile float fps_ui = 0;
 
 typedef void (ODROID_UI_CALLCONV *odroid_display_func_def)(uint8_t* buffer, uint32_t* myPalette);
 
@@ -122,6 +124,8 @@ void videoTask(void *arg)
     uint8_t* param;
 
     videoTaskIsRunning = true;
+    float old = 0;
+    bool update = false;
     
     update_display_func();
     
@@ -131,6 +135,13 @@ void videoTask(void *arg)
 
         if (param == 1)
             break;
+        if (fps_ui!=old) 
+        {
+            //update_ui_fps_text(fps_ui);
+            old = fps_ui;
+            update = true;
+            printf("FPS:%f, BATTERY:%d [%d]\n", old, battery.millivolts, battery.percentage);
+        }
 /*
         if (previous_scaling_enabled != scaling_enabled || previous_filtering != filtering)
         {
@@ -144,12 +155,18 @@ void videoTask(void *arg)
         odroid_display_lock();
         ili9341_write_frame_lynx_v2_mode0(param, lynx_mColourMap);
         //odroid_display_func(param, lynx_mColourMap);
+        //if (config_ui_stats)
+        if (update) 
+        {
+            // odroid_ui_stats(256, 0);
+            update = false;            
+        }
         odroid_display_unlock();
 #else
         ili9341_write_frame_lynx(param, palette, scaling_enabled);
 #endif
 
-        odroid_input_battery_level_read(&battery);
+        // odroid_input_battery_level_read(&battery);
 
         xQueueReceive(vidQueue, &param, portMAX_DELAY);
     }
@@ -344,10 +361,10 @@ odroid_ui_func_toggle_rc menu_lynx_filtering_toggle(odroid_ui_entry *entry, odro
 
 void menu_lynx_init(odroid_ui_window *window) {
     odroid_ui_create_entry(window, &menu_lynx_audio_update, &menu_lynx_audio_toggle);
-    odroid_ui_create_entry(window, &menu_lynx_filtering_update, &menu_lynx_filtering_toggle);
+    // odroid_ui_create_entry(window, &menu_lynx_filtering_update, &menu_lynx_filtering_toggle);
 }
 
-inline void update_fps() {
+inline void update_ui_fps() {
 	stopTime = xthal_get_ccount();
     int elapsedTime;
     if (stopTime > startTime)
@@ -362,14 +379,18 @@ inline void update_fps() {
     {
       float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
       float fps = frame / seconds;
+      fps_ui = fps;
 
-      printf("HEAP:0x%x, FPS:%f, BATTERY:%d [%d]\n", esp_get_free_heap_size(), fps, battery.millivolts, battery.percentage);
+      //printf("HEAP:0x%x, FPS:%f, BATTERY:%d [%d]\n", esp_get_free_heap_size(), fps, battery.millivolts, battery.percentage);
       
       //vTaskGetRunTimeStats(pmem);
       //printf(pmem);
       
       frame = 0;
       totalElapsedTime = 0;
+      /*if (config_ui_stats) {
+        update_ui_fps_text(fps);
+      }*/
     }
     startTime = stopTime;
     // usleep(20*1000UL);
@@ -703,7 +724,7 @@ void odroid_retro_video_refresh_t(const void *data, unsigned width,
      } else {
      	skipNextFrame = true;
      }
-     update_fps();
+     update_ui_fps();
 
 #ifdef MY_KEYS_IN_VIDEO
 #ifdef MY_KEYS
@@ -724,7 +745,7 @@ bool skipNextFrame = false;
 void odroid_retro_video_refresh_t(const void *data, unsigned width,
       unsigned height, size_t pitch) {
       xQueueSend(vidQueue, &data, portMAX_DELAY);
-      update_fps();
+      update_ui_fps();
 }
 #endif
 

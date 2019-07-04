@@ -329,6 +329,23 @@ typedef struct
    };
 }TMATHNP;
 
+#define SUSIE_INLINE_PaintSprites
+//#define SUSIE_INLINE_PROCESSPIXEL // negativ performance
+
+#define SUSIE_INLINE_WRITEPIXEL
+#define SUSIE_INLINE_READPIXEL
+#define SUSIE_INLINE_READCOLLISION
+#define SUSIE_INLINE_WRITECOLLISION
+#define SUSIE_INLINE_LineInit
+#define SUSIE_INLINE_LineGetPixel
+#define SUSIE_INLINE_LineGetBits
+
+#define SUSIE_INLINE_DoMathDivide
+#define SUSIE_INLINE_DoMathMultiply
+
+#define RAM_PEEK(m)             (mRamPointer[(m)])
+#define RAM_PEEKW(m)            (mRamPointer[(m)]+(mRamPointer[(m)+1]<<8))
+#define RAM_POKE(m1,m2)         {mRamPointer[(m1)]=(m2);}
 
 class CSusie : public CLynxBase
 {
@@ -342,30 +359,101 @@ class CSusie : public CLynxBase
 
       UBYTE	Peek(ULONG addr);
       void	Poke(ULONG addr,UBYTE data);
-      ULONG	ReadCycle(void) {return 9;};
-      ULONG	WriteCycle(void) {return 5;};
+      //ULONG	ReadCycle(void) {return 9;};
+      //WriteCycleULONG	WriteCycle(void) {return 5;};
       ULONG	ObjectSize(void) {return SUSIE_SIZE;};
 
-      void	SetButtonData(ULONG data) {mJOYSTICK.Byte=(UBYTE)data;mSWITCHES.Byte=(UBYTE)(data>>8);};
-      ULONG	GetButtonData(void) {return mJOYSTICK.Byte+(mSWITCHES.Byte<<8);};
+      inline void	SetButtonData(ULONG data) {mJOYSTICK.Byte=(UBYTE)data;mSWITCHES.Byte=(UBYTE)(data>>8);};
+      inline ULONG	GetButtonData(void) {return mJOYSTICK.Byte+(mSWITCHES.Byte<<8);};
 
-      ULONG	PaintSprites(void);
+#ifdef SUSIE_INLINE_PaintSprites
+    inline ULONG    PaintSprites(void) {
+      #include "susie_paintsprites.h"
+      }
+#else
+    ULONG    PaintSprites(void);
+#endif
 
-   private:
+   public:
+#ifdef SUSIE_INLINE_DoMathDivide
+      inline void    DoMathDivide(void) {
+      #include "susie_DoMathDivide.h"
+      }
+#else
       void	DoMathDivide(void);
+#endif
+#ifdef SUSIE_INLINE_DoMathMultiply
+      inline void  DoMathMultiply(void) {
+      #include "susie_DoMathMultiply.h"
+      }
+#else
       void	DoMathMultiply(void);
-      ULONG	LineInit(ULONG voff);
-      ULONG	LineGetPixel(void);
-      ULONG	LineGetBits(ULONG bits);
+#endif
 
-      void	ProcessPixel(ULONG hoff,ULONG pixel);
-      void	WritePixel(ULONG hoff,ULONG pixel);
-      ULONG	ReadPixel(ULONG hoff);
-      void	WriteCollision(ULONG hoff,ULONG pixel);
+#ifdef SUSIE_INLINE_LineInit
+      inline ULONG LineInit(ULONG voff) {
+      #include "susie_LineInit.h"
+      }
+#else
+      ULONG	LineInit(ULONG voff);
+#endif
+#ifdef SUSIE_INLINE_LineGetPixel
+      inline ULONG LineGetPixel(void) {
+      #include "susie_LineGetPixel.h"
+      }
+#else
+      ULONG	LineGetPixel(void);
+#endif
+#ifdef SUSIE_INLINE_LineGetBits
+      inline ULONG LineGetBits(ULONG bits) {
+      #include "susie_LineGetBits.h"
+      }
+#else
+      ULONG	LineGetBits(ULONG bits);
+#endif
+
+#ifdef SUSIE_INLINE_PROCESSPIXEL
+      inline void	ProcessPixel(ULONG hoff,ULONG pixel) {
+      #include "susie_processpixel.h"
+      }
+#else
+      void    ProcessPixel(ULONG hoff,ULONG pixel);
+#endif
+#ifdef SUSIE_INLINE_WRITEPIXEL
+    inline void  WritePixel(ULONG hoff,ULONG pixel) {
+    #include "susie_writepixel.h"
+    }
+#else
+    void    WritePixel(ULONG hoff,ULONG pixel);
+#endif
+
+#ifdef SUSIE_INLINE_READPIXEL
+    inline ULONG   ReadPixel(ULONG hoff) {
+    #include "susie_readpixel.h"
+    }
+#else
+    ULONG   ReadPixel(ULONG hoff);
+#endif
+
+#ifdef SUSIE_INLINE_WRITECOLLISION
+    inline void    WriteCollision(ULONG hoff,ULONG pixel) {
+    #include "susie_writecollision.h"
+    }
+#else
+    void    WriteCollision(ULONG hoff,ULONG pixel);
+#endif  
+
+#ifdef SUSIE_INLINE_READCOLLISION
+     inline ULONG ReadCollision(ULONG hoff) {
+     #include "susie_readcollision.h"
+     }
+#else
       ULONG	ReadCollision(ULONG hoff);
+#endif
 
    private:
       CSystem&	mSystem;
+      ULONG cycles_used;
 
       UUWORD		mTMPADR;		// ENG
       UUWORD		mTILTACUM;		// ENG
