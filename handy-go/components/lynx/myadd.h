@@ -3,6 +3,17 @@
 
 #include <stdlib.h>
 
+//#define MY_HANDY_CPU
+
+#ifdef MY_HANDY_CPU
+#define REG_16BIT unsigned short
+#define REG_16BIT_CROP(a) 
+#else
+//#define REG_16BIT int
+#define REG_16BIT unsigned int
+#define REG_16BIT_CROP(a) a&=0xffff
+#endif
+
 // 65 -> 72 fps
 #define MY_NO_STATIC
 // 63 -> 65 fps

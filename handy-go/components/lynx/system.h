@@ -360,6 +360,66 @@ class CSystem : public CSystemBase
         //return ((p->Peek(addr))+(p->Peek(addr+1)<<8));
         return ((Get_Handler(addr)->Peek(addr))+(Get_Handler(addr+1)->Peek(addr+1)<<8));
       };
+
+      /*
+      inline CLynxBase *Get_Handler(ULONG addr)
+        {
+            if (addr < 0xfc00) return mRam;
+            if (addr == 0xFFF9) return mMemMap;
+            // if (mMemMap->mState == 0 || addr == 0xFFF8) return mRam;
+            if (addr == 0xFFF8) return mRam;
+            if ((addr&0xff00)==0xfc00) {
+                return mMemMap->mSusieEnabled?(CLynxBase*)mSusie:(CLynxBase*)mRam;
+            } else if ((addr&0xff00)==0xfd00) {
+                return mMemMap->mMikieEnabled?(CLynxBase*)mMikie:(CLynxBase*)mRam;
+            } else if (addr>=0xfffa) {
+                return mMemMap->mVectorsEnabled?(CLynxBase*)mRom:(CLynxBase*)mRam;
+            }
+            return mMemMap->mRomEnabled?(CLynxBase*)mRom:(CLynxBase*)mRam;
+        }
+      
+      #define MY_POKE(addr, data) \
+      {\
+            if (addr < 0xfc00) mRam->Poke(addr, data);\
+            else\
+            if (addr == 0xFFF9) mMemMap->Poke(addr, data);\
+            else\
+            if (addr == 0xFFF8) mRam->Poke(addr, data);\
+            else\
+            if ((addr&0xff00)==0xfc00) {\
+                if (mMemMap->mSusieEnabled) mSusie->Poke(addr, data);\
+                else mRam->Poke(addr, data);\
+            } else if ((addr&0xff00)==0xfd00) {\
+                if (mMemMap->mMikieEnabled) mMikie->Poke(addr, data);\
+                else mRam->Poke(addr, data);\
+            } else if (addr>=0xfffa) {\
+                if (mMemMap->mVectorsEnabled) mRom->Poke(addr, data);\
+                else mRam->Poke(addr, data);\
+            }\
+            if (mMemMap->mRomEnabled) mRom->Poke(addr, data);\
+            else mRam->Poke(addr, data);\
+      }
+      
+        inline void  Poke_CPU(ULONG addr, UBYTE data)
+      {
+        MY_POKE(addr, data);
+      };
+      inline UBYTE Peek_CPU(ULONG addr)
+      {
+        CLynxBase *p = Get_Handler(addr);
+        return p->Peek(addr);
+      };
+      inline void  PokeW_CPU(ULONG addr,UWORD data)
+      {
+        MY_POKE(addr, (data&0xff));
+        addr++;
+        MY_POKE(addr, (data>>8));
+      };
+      inline UWORD PeekW_CPU(ULONG addr)
+      {
+        return ((Get_Handler(addr)->Peek(addr))+(Get_Handler(addr+1)->Peek(addr+1)<<8));
+      };
+      */
 #else
 #ifdef MY_MEM_MODE
       inline void  Poke_CPU(ULONG addr, UBYTE data)
@@ -444,14 +504,14 @@ class CSystem : public CSystemBase
 
       // Suzy system interfacing
 
-      ULONG	PaintSprites(void) {return mSusie->PaintSprites();};
+      inline ULONG	PaintSprites(void) {return mSusie->PaintSprites();};
 
       // Miscellaneous
 
-      void	SetButtonData(ULONG data) {mSusie->SetButtonData(data);};
-      ULONG	GetButtonData(void) {return mSusie->GetButtonData();};
-      void	SetCycleBreakpoint(ULONG breakpoint) {mCycleCountBreakpoint=breakpoint;};
-      UBYTE*	GetRamPointer(void) {return mRam->GetRamPointer();};
+      inline void	SetButtonData(ULONG data) {mSusie->SetButtonData(data);};
+      inline ULONG	GetButtonData(void) {return mSusie->GetButtonData();};
+      inline void	SetCycleBreakpoint(ULONG breakpoint) {mCycleCountBreakpoint=breakpoint;};
+      inline UBYTE*	GetRamPointer(void) {return mRam->GetRamPointer();};
 #ifdef _LYNXDBG
       void	DebugTrace(int address);
 

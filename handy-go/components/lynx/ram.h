@@ -75,14 +75,14 @@ class CRam : public CLynxBase
       bool	ContextSave(FILE *fp);
       bool	ContextLoad(LSS_FILE *fp);
 #ifdef MY_RAM_IN_32BIT
-      void  Poke(ULONG addr, UBYTE data){ mRamData[addr]=data;};
-      UBYTE Peek(ULONG addr){ return(mRamData[addr]);};
+      inline void  Poke(ULONG addr, UBYTE data){ mRamData[addr]=data;};
+      inline UBYTE Peek(ULONG addr){ return(mRamData[addr]);};
 #else
-      void	Poke(ULONG addr, UBYTE data){ mRamData[addr]=data;};
-      UBYTE	Peek(ULONG addr){ return(mRamData[addr]);};
+      inline void	Poke(ULONG addr, UBYTE data){ mRamData[addr]=data;};
+      inline UBYTE	Peek(ULONG addr){ return(mRamData[addr]);};
 #endif
-      ULONG	ReadCycle(void) {return 5;};
-      ULONG	WriteCycle(void) {return 5;};
+      //ULONG	ReadCycle(void) {return 5;};
+      //ULONG	WriteCycle(void) {return 5;};
       ULONG   ObjectSize(void) {return RAM_SIZE;};
       UBYTE*	GetRamPointer(void) { return mRamData; };
 

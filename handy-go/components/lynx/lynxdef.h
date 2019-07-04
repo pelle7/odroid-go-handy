@@ -41,6 +41,8 @@
 // 01Aug1997 KW Document header added & class documented.                   //
 //                                                                          //
 //////////////////////////////////////////////////////////////////////////////
+#ifndef LYNXDEF_H
+#define LYNXDEF_H
 
 #define TMPADR			0xfc00
 #define TMPADRL			0xfc00
@@ -279,3 +281,5 @@
 #define CPUINT			0xfffe
 #define CPUINTL			0xfffe
 #define CPUINTH			0xffff
+
+#endif

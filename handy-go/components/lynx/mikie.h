@@ -70,6 +70,8 @@
 
 class CSystem;
 
+extern bool skipNextFrame;
+
 #define MIKIE_START	0xfd00
 #define MIKIE_SIZE	0x100
 
@@ -182,6 +184,31 @@ enum
    MIKIE_PIXEL_FORMAT_RAW,
 };
 
+#define MIKIE_INLINE_Update
+#define MIKIE_INLINE_UpdateSound
+#define MIKIE_INLINE_UpdateCalcSound
+// #define MIKIE_INLINE_DisplayRenderLine // negativ performance
+// #define MIKIE_INLINE_DisplayEndOfFrame // neutral
+// #define MIKIE_INLINE_GetLfsrNext // negativ performance
+
+#if MY_AUDIO_MODE==2
+#define AUDIO_CALC(x, audio_out, audio_atten) \
+              if(!(mSTEREO & (0x10 << x))) \
+              { \
+                if(mPAN & (0x10 << x)) \
+                  cur_lsample += (audio_out*(audio_atten&0xF0))/(16*16); \
+                else \
+                  cur_lsample += audio_out; \
+              } \
+              if(!(mSTEREO & (0x01 << x))) \
+              { \
+                if(mPAN & (0x01 << x)) \
+                  cur_rsample += (audio_out*(audio_atten&0x0F))/16; \
+                else \
+                  cur_rsample += audio_out; \
+              }
+#endif
+
 class CMikie : public CLynxBase
 {
    public:
@@ -194,12 +221,18 @@ class CMikie : public CLynxBase
 
       UBYTE	Peek(ULONG addr);
       void	Poke(ULONG addr,UBYTE data);
-      ULONG	ReadCycle(void) {return 5;};
-      ULONG	WriteCycle(void) {return 5;};
+      //ULONG	ReadCycle(void) {return 5;};
+      //ULONG	WriteCycle(void) {return 5;};
       ULONG	ObjectSize(void) {return MIKIE_SIZE;};
       void	PresetForHomebrew(void);
-      ULONG	GetLfsrNext(ULONG current);
-
+#ifdef MIKIE_INLINE_GetLfsrNext
+    inline ULONG   GetLfsrNext(ULONG current) {
+    #include "mikie_GetLfsrNext.h"
+    }
+#else
+    ULONG   GetLfsrNext(ULONG current);
+#endif
+    
       void	ComLynxCable(int status);
       void	ComLynxRxData(int data);
       void	ComLynxTxLoopback(int data);
@@ -209,15 +242,49 @@ class CMikie : public CLynxBase
 
       void	BlowOut(void);
 
+#ifdef MIKIE_INLINE_DisplayRenderLine
+      inline ULONG DisplayRenderLine(void) {
+      #include "mikie_DisplayRenderLine_raw.h"
+      }
+#else
       ULONG	DisplayRenderLine(void);
+#endif
+
+#ifdef MIKIE_INLINE_DisplayEndOfFrame
+      inline ULONG DisplayEndOfFrame(void) {
+      #include "mikie_DisplayEndOfFrame.h"
+      }
+#else
       ULONG	DisplayEndOfFrame(void);
+#endif
 
       inline void SetCPUSleep(void) {gSystemCPUSleep=TRUE;};
       inline void ClearCPUSleep(void) {gSystemCPUSleep=FALSE;gSystemCPUSleep_Saved=FALSE;};
 
+#ifdef MIKIE_INLINE_Update
+    inline void Update(void) {
+        #include "mikie_Update.h"
+      }
+#else
+    void Update(void);
+#endif
+      
+#ifdef MIKIE_INLINE_UpdateSound
+    inline void UpdateSound(void) {
+        #include "mikie_UpdateSound.h"
+      }
+#else
+    void UpdateSound(void);
+#endif
 
-      void Update(void);
-      inline void UpdateSound(void);
+#ifdef MIKIE_INLINE_UpdateCalcSound
+    inline void UpdateCalcSound(void) {
+        #include "mikie_Update_CalcSound.h"
+      }
+#else
+    void UpdateCalcSound(void);
+#endif
+      
       inline bool SwitchAudInDir(void){ return(mIODIR&0x10);};
       inline bool SwitchAudInValue(void){ return (mIODAT&0x10);};
 

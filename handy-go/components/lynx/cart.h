@@ -121,8 +121,8 @@ class CCart : public CLynxBase
 
       void	Poke(ULONG addr,UBYTE data);
       UBYTE	Peek(ULONG addr);
-      ULONG	ReadCycle(void) {return 15;};
-      ULONG	WriteCycle(void) {return 15;};
+      //ULONG	ReadCycle(void) {return 15;};
+      //ULONG	WriteCycle(void) {return 15;};
       void	BankSelect(EMMODE newbank) {mBank=newbank;}
       ULONG	ObjectSize(void) {return (mBank==bank0)?mMaskBank0+1:mMaskBank1+1;};
 

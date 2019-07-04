@@ -26,12 +26,20 @@ bool MyQuickLoadState();
 bool MyQuickSaveState();
 
 extern bool scaling_enabled;
+extern bool config_ui_stats;
 
-bool config_speedup = false;
+bool config_speedup;
+
+uint startTime;
+uint stopTime;
+uint totalElapsedTime;
+int frame;
+odroid_battery_state battery;
 
 static bool short_cut_menu_open = false;
 
-static uint16_t *framebuffer = NULL;
+uint16_t *framebuffer = NULL;
+//char *font8x8_basic2;
 
 // 0x7D000
 #define QUICK_SAVE_BUFFER_SIZE (512 * 1024)
@@ -83,7 +91,7 @@ void renderToStdout(char *bitmap) {
     }
 }
 
-void renderToFrameBuffer(int xo, int yo, char *bitmap, uint16_t color, uint16_t color_bg, uint16_t width) {
+inline void renderToFrameBuffer(int xo, int yo, char *bitmap, uint16_t color, uint16_t color_bg, uint16_t width) {
     int x,y;
     int set;
     for (x=0; x < 8; x++) {
@@ -97,10 +105,27 @@ void renderToFrameBuffer(int xo, int yo, char *bitmap, uint16_t color, uint16_t 
     }
 }
 
-void render(int offset_x, int offset_y, uint16_t text_len, const char *text, uint16_t color, uint16_t color_bg) {
+inline void render2(int offset_x, int offset_y, const char *text, uint16_t color, uint16_t color_bg) {
+    int len = strlen(text);
+    int x, y;
+    uint16_t width = len * 8;
+    //char pp[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    x = offset_x * 8;
+    y = offset_y * 8;
+    for (int i = 0; i < len; i++) {
+       unsigned char c;
+       c = text[i];
+       renderToFrameBuffer(x, y, font8x8_basic[c], color, color_bg, width);
+       //renderToFrameBuffer(x, y, &font8x8_basic2[((uint16_t)c)*8], color, color_bg, width);
+       x+=8;
+    }
+}
+
+inline void render(int offset_x, int offset_y, uint16_t text_len, const char *text, uint16_t color, uint16_t color_bg) {
 	int len = strlen(text);
     int x, y;
     uint16_t width = text_len * 8;
+    //char pp[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     x = offset_x * 8;
     y = offset_y * 8;
 	//for (int i = 0; i < len; i++) {
@@ -112,6 +137,7 @@ void render(int offset_x, int offset_y, uint16_t text_len, const char *text, uin
 	      c = ' ';
 	   }
 	   renderToFrameBuffer(x, y, font8x8_basic[c], color, color_bg, width);
+	   //renderToFrameBuffer(x, y, &font8x8_basic2[((uint16_t)c)*8], color, color_bg, width);
 	   x+=8;
 	   //if (x>=width) {
 	   //	break;
@@ -194,6 +220,7 @@ bool odroid_ui_menu_ext(bool restart_menu, odroid_ui_func_window_init_def func_w
 	bool shortcut_key = false;
 	odroid_gamepad_state lastJoysticState;
 
+	usleep(25*1000UL);
 	prepare();
 	clean_draw_buffer();
 	odroid_input_gamepad_read(&lastJoysticState);
@@ -328,12 +355,16 @@ void odroid_ui_func_update_speedup(odroid_ui_entry *entry) {
 	sprintf(entry->text, "%-9s: %d", "speedup", config_speedup);
 }
 
+void odroid_ui_func_update_ui_stats(odroid_ui_entry *entry) {
+    sprintf(entry->text, "%-9s: %d", "show fps", config_ui_stats);
+}
+
 void odroid_ui_func_update_volume(odroid_ui_entry *entry) {
 	sprintf(entry->text, "%-9s: %d", "vol", odroid_audio_volume_get());
 }
 
 void odroid_ui_func_update_scale(odroid_ui_entry *entry) {
-	sprintf(entry->text, "%-9s: %d", "scale", scaling_enabled);
+	sprintf(entry->text, "%-9s: %s", "scale", scaling_enabled?"on":"off");
 }
 
 void odroid_ui_func_update_brightness(odroid_ui_entry *entry) {
@@ -364,6 +395,11 @@ void odroid_ui_func_update_quickload(odroid_ui_entry *entry) {
 odroid_ui_func_toggle_rc odroid_ui_func_toggle_speedup(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
 	config_speedup = !config_speedup;
 	return ODROID_UI_FUNC_TOGGLE_RC_MENU_CLOSE;
+}
+
+odroid_ui_func_toggle_rc odroid_ui_func_toggle_ui_stats(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
+    config_ui_stats = !config_ui_stats;
+    return ODROID_UI_FUNC_TOGGLE_RC_MENU_CLOSE;
 }
 
 odroid_ui_func_toggle_rc odroid_ui_func_toggle_volume(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
@@ -430,9 +466,9 @@ int exec_menu(bool *restart_menu, odroid_ui_func_window_init_def func_window_ini
 	window.y = 40;
 	window.entry_count = 0;
 	
-	odroid_ui_create_entry(&window, &odroid_ui_func_update_speedup, &odroid_ui_func_toggle_speedup);
+	//odroid_ui_create_entry(&window, &odroid_ui_func_update_speedup, &odroid_ui_func_toggle_speedup);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_volume, &odroid_ui_func_toggle_volume);
-	odroid_ui_create_entry(&window, &odroid_ui_func_update_scale, &odroid_ui_func_toggle_scale);
+	//odroid_ui_create_entry(&window, &odroid_ui_func_update_scale, &odroid_ui_func_toggle_scale);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_brightness, &odroid_ui_func_toggle_brightness);
 	
 	if (func_window_init) {
@@ -442,6 +478,7 @@ int exec_menu(bool *restart_menu, odroid_ui_func_window_init_def func_window_ini
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_quicksave, &odroid_ui_func_toggle_quicksave);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_quickload, &odroid_ui_func_toggle_quickload);
 	//odroid_ui_create_entry(&window, &odroid_ui_func_update_choosegame, &odroid_ui_func_toggle_choosegame);
+	//odroid_ui_create_entry(&window, &odroid_ui_func_update_ui_stats, &odroid_ui_func_toggle_ui_stats);
 	
 	window.height = window.entry_count;
 	odroid_ui_window_update(&window);
@@ -517,6 +554,11 @@ int exec_menu(bool *restart_menu, odroid_ui_func_window_init_def func_window_ini
 void odroid_ui_debug_enter_loop() {
 	odroid_settings_Volume_set(ODROID_VOLUME_LEVEL1);
 	printf("odroid_ui_debug_enter_loop: go\n");
+	startTime = xthal_get_ccount();
+	//font8x8_basic2 = (char*)heap_caps_malloc(128*8, MALLOC_CAP_8BIT|MALLOC_CAP_INTERNAL); //MALLOC_CAP_SPIRAM);
+	//memcpy(font8x8_basic2, font8x8_basic, 128*8);
+	prepare();
+	config_speedup = false;
 }
 
 bool MyQuickSaveState() {
@@ -731,4 +773,48 @@ char *odroid_ui_choose_file(const char *path, const char *ext) {
     if (entries_buffer) heap_caps_free(entries_buffer);
     odroid_settings_RomFilePath_set(rc);
     return rc;
+}
+/*
+void update_ui_fps() {
+    stopTime = xthal_get_ccount();
+    int elapsedTime;
+    if (stopTime > startTime)
+      elapsedTime = (stopTime - startTime);
+    else
+      elapsedTime = ((uint64_t)stopTime + (uint64_t)0xffffffff) - (startTime);
+
+    totalElapsedTime += elapsedTime;
+    ++frame;
+
+    if (frame == 60)
+    {
+      float seconds = totalElapsedTime / (CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ * 1000000.0f);
+      float fps = frame / seconds;
+      
+      printf("HEAP:0x%x, FPS:%f, BATTERY:%d [%d]\n", esp_get_free_heap_size(), fps, battery.millivolts, battery.percentage);
+      
+      //vTaskGetRunTimeStats(pmem);
+      //printf(pmem);
+      
+      frame = 0;
+      totalElapsedTime = 0;
+      if (config_ui_stats)
+      {
+        sprintf(buf, "%2.2f", fps);
+        render(0, 0, 5, buf, color_default, color_black);
+      }
+    }
+    startTime = stopTime;
+    // usleep(20*1000UL);
+}
+*/
+
+void update_ui_fps_text(float fps) {
+    sprintf(buf, "%2.2f", fps);
+    //strcpy(buf, "");
+    render2(0, 0, /*5,*/ buf, color_default, color_black);
+}
+
+void odroid_ui_stats(uint16_t x, uint16_t y) {
+    ili9341_write_frame_rectangleLE(x, y, 5 * 8, 8, framebuffer);
 }
