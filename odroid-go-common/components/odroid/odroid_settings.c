@@ -20,6 +20,7 @@ static const char* NvsKey_StartAction = "StartAction";
 static const char* NvsKey_ScaleDisabled = "ScaleDisabled";
 static const char* NvsKey_AudioSink = "AudioSink";
 static const char* NvsKey_GBPalette = "GBPalette";
+static const char* NvsKey_ForceInternalGameSelect = "ForceGameSelect";
 
 char* odroid_util_GetFileName(const char* path)
 {
@@ -521,6 +522,43 @@ void odroid_settings_GBPalette_set(int32_t value)
 
     // Read
     err = nvs_set_i32(my_handle, NvsKey_GBPalette, value);
+    if (err != ESP_OK) abort();
+
+    // Close
+    nvs_close(my_handle);
+}
+
+int32_t odroid_settings_ForceInternalGameSelect_get()
+{
+    // TODO: Move to header
+    int result = 2;
+
+    // Open
+    nvs_handle my_handle;
+    esp_err_t err = nvs_open(NvsNamespace, NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) abort();
+
+    // Read
+    err = nvs_get_i32(my_handle, NvsKey_ForceInternalGameSelect, &result);
+    if (err == ESP_OK)
+    {
+        printf("%s: value=%d\n", __func__, result);
+    }
+
+    // Close
+    nvs_close(my_handle);
+
+    return result;
+}
+void odroid_settings_ForceInternalGameSelect_set(int32_t value)
+{
+    // Open
+    nvs_handle my_handle;
+    esp_err_t err = nvs_open(NvsNamespace, NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) abort();
+
+    // Read
+    err = nvs_set_i32(my_handle, NvsKey_ForceInternalGameSelect, value);
     if (err != ESP_OK) abort();
 
     // Close

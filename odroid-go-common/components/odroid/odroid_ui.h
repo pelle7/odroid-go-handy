@@ -5,6 +5,8 @@
 #include "esp_system.h"
 #include "odroid_input.h"
 
+#define MY_LYNX_INTERNAL_GAME_SELECT
+
 extern bool config_speedup;
 extern bool config_ui_stats;
 
@@ -85,6 +87,7 @@ bool odroid_ui_menu_ext(bool restart_menu, odroid_ui_func_window_init_def func_w
 void odroid_ui_debug_enter_loop();
 void update_ui_fps_text(float fps);
 void odroid_ui_stats(uint16_t x, uint16_t y);
+bool odroid_ui_ask(const char *text);
 
 void QuickSaveSetBuffer(void* data);
 extern bool QuickLoadState(FILE *f);
