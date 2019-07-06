@@ -37,7 +37,8 @@ VAR_S retro_input_state_t input_state_cb;
 
 VAR_S CSystem *lynx = NULL;
 
-#define AUDIO_BUFFER_SIZE 1536
+//#define AUDIO_BUFFER_SIZE 1536 // Some games need 1740
+#define AUDIO_BUFFER_SIZE 1920
 VAR_S unsigned char *snd_buffer16s;
 //VAR_S unsigned short *soundBuffer; //soundBuffer[4096 * 8];
 
@@ -227,8 +228,8 @@ FUNC_S void lynx_input(void)
 
 FUNC_S bool lynx_initialize_sound(void)
 {
-   // gAudioEnabled = true;
-   gAudioEnabled = false;
+   gAudioEnabled = true;
+   //gAudioEnabled = false;
    snd_buffer16s = (unsigned char *) (&gAudioBuffer);
    //soundBuffer = MY_MEM_ALLOC_SLOW(unsigned short, 4096 * 8);
    /*soundBuffer = MY_MEM_ALLOC_FAST(unsigned short, AUDIO_BUFFER_SIZE);
@@ -308,6 +309,23 @@ FUNC_S void update_geometry()
 
    retro_get_system_av_info(&info);
    environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info);
+}
+
+FUNC_S void my_setbutton_mapping(unsigned char id)
+{
+    switch (id)
+    {
+    case 1:
+    btn_map = btn_map_rot_270;
+    break;
+    case 2:
+    btn_map = btn_map_rot_90;
+    break;
+    case 0:
+    default:
+    btn_map = btn_map_no_rot;
+    break;
+    }
 }
 
 FUNC_S void check_variables(void)
@@ -582,12 +600,6 @@ size_t retro_get_memory_size(unsigned type)
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// Inside this "extern C" block, I can define C functions that are able to call C++ code
-
-void AAA_sayHi(const char *name) {
-    printf("Called CPP file! '%s'\n", name);
-}
 
 bool QuickSaveState(FILE* f)
 {

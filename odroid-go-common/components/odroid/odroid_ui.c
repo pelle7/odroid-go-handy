@@ -468,7 +468,7 @@ int exec_menu(bool *restart_menu, odroid_ui_func_window_init_def func_window_ini
 	
 	//odroid_ui_create_entry(&window, &odroid_ui_func_update_speedup, &odroid_ui_func_toggle_speedup);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_volume, &odroid_ui_func_toggle_volume);
-	//odroid_ui_create_entry(&window, &odroid_ui_func_update_scale, &odroid_ui_func_toggle_scale);
+	odroid_ui_create_entry(&window, &odroid_ui_func_update_scale, &odroid_ui_func_toggle_scale);
 	odroid_ui_create_entry(&window, &odroid_ui_func_update_brightness, &odroid_ui_func_toggle_brightness);
 	
 	if (func_window_init) {
@@ -664,7 +664,7 @@ char *odroid_ui_choose_file(const char *path, const char *ext) {
             continue;
         
         if (entries_refs) {
-           entries_refs[count] = entries_buffer + count_chars;
+           entries_refs[count] = ((uint32_t)entries_buffer) + count_chars;
            strcpy(&entries_buffer[count_chars],in_file->d_name);
            //printf("DIR entry: %p; %d; Offset: %d; File: %s\n", (char*)entries_refs[count], count, count_chars, in_file->d_name);
         }
@@ -693,6 +693,11 @@ char *odroid_ui_choose_file(const char *path, const char *ext) {
     int selected = 0;
     int last_key = -1;
     bool run = true;
+    
+    for (int i = 0;i < count; i++) {
+        char *file = (char*)entries_refs[i];
+        printf("%s\n", file);
+    }
     
     if (selected_file) {
        for (int i = 0;i < count; i++) {
