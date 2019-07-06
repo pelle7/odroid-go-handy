@@ -27,6 +27,11 @@ void ili9341_write_frame_lynx_v2_mode1(uint8_t* buffer, uint32_t* myPalette);
 void ili9341_write_frame_lynx_v2_mode2(uint8_t* buffer, uint32_t* myPalette);
 void ili9341_write_frame_lynx_v2_mode3(uint8_t* buffer, uint32_t* myPalette);
 void ili9341_write_frame_lynx_v2_original(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_original_rotate_R(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_original_rotate_L(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_mode0_rotate_R(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_mode0_rotate_L(uint8_t* buffer, uint32_t* myPalette);
+
 void ili9341_write_frame_gb(uint16_t* buffer, int scale);
 
 void backlight_percentage_set(int value);

@@ -718,9 +718,10 @@ bool CSystem::ContextLoad(FILE *fp_full)
 
    {
       // Just open an read into memory
+      long offset = ftell(fp_full);
       fseek(fp_full,0,SEEK_END);
-      filesize=ftell(fp_full);
-      fseek(fp_full,0,SEEK_SET);
+      filesize=ftell(fp_full) - offset;
+      fseek(fp_full,offset,SEEK_SET);
       filememory=MY_MEM_NEW_SLOW(UBYTE, filesize);
 
       if(fread(filememory,sizeof(char),filesize,fp_full)!=filesize)

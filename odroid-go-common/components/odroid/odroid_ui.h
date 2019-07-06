@@ -87,6 +87,8 @@ void update_ui_fps_text(float fps);
 void odroid_ui_stats(uint16_t x, uint16_t y);
 
 void QuickSaveSetBuffer(void* data);
+extern bool QuickLoadState(FILE *f);
+extern bool QuickSaveState(FILE *f);
 
 odroid_ui_entry *odroid_ui_create_entry(odroid_ui_window *window, odroid_ui_func_update_def func_update, odroid_ui_func_toggle_def func_toggle);
 

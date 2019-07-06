@@ -18,7 +18,6 @@
 #define MY_NO_STATIC
 // 63 -> 65 fps
 #define MY_KEYS_IN_CALLBACK
-//#define MY_KEYS
 
 #define MY_RETRO_LOOP
 #define MY_KEYS_IN_VIDEO
