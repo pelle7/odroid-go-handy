@@ -56,3 +56,6 @@ void odroid_settings_AudioSink_set(ODROID_AUDIO_SINK value);
 
 int32_t odroid_settings_GBPalette_get();
 void odroid_settings_GBPalette_set(int32_t value);
+
+int32_t odroid_settings_ForceInternalGameSelect_get();
+void odroid_settings_ForceInternalGameSelect_set(int32_t value);

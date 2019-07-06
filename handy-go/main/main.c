@@ -156,9 +156,9 @@ void update_display_func() {
         xQueueReceive(vidQueue, &param, portMAX_DELAY); \
     } \
     xQueueReceive(vidQueue, &param, portMAX_DELAY); \
-    odroid_display_lock(); \
-    odroid_display_show_hourglass(); \
-    odroid_display_unlock(); \
+    /*odroid_display_lock();*/ \
+    /*odroid_display_show_hourglass();*/ \
+    /*odroid_display_unlock();*/ \
     videoTaskIsRunning = false; \
     printf("%s: FINISHED\n", __func__); \
     vTaskDelete(NULL); \
@@ -291,7 +291,7 @@ char unalChar(const unsigned char *adr) {
     return 0;
 }
 
-static void PowerDown()
+NOINLINE void PowerDown()
 {
     uint16_t* param = TASK_BREAK;
     void *exitAudioTask = NULL;
@@ -323,7 +323,7 @@ static void PowerDown()
     abort();
 }
 
-static void DoHome()
+NOINLINE void DoMenuHome(bool save)
 {
     uint16_t* param = TASK_BREAK;
     void *exitAudioTask = NULL;
@@ -341,20 +341,28 @@ static void DoHome()
     xQueueSend(vidQueue, &param, portMAX_DELAY);
     while (videoTaskIsRunning) { vTaskDelay(1); }
 
+    odroid_gamepad_state joystick;   
+    odroid_input_gamepad_read(&joystick);
+    if (!joystick.values[ODROID_INPUT_START] && !save)
+    {
+       save = odroid_ui_ask(" Save current state? Yes=A ; No=B ");
+    }
+    odroid_display_show_hourglass();
+
+    if (save) gpio_set_level(GPIO_NUM_2, 1);
 
     // state
     printf("PowerDown: Saving state.\n");
-    odroid_gamepad_state joystick;   
-    odroid_input_gamepad_read(&joystick);
-    if (!joystick.values[ODROID_INPUT_START]) {
+    if (!joystick.values[ODROID_INPUT_START] && save) {
        SaveState();
     }
+#ifdef MY_LYNX_INTERNAL_GAME_SELECT
+  odroid_settings_ForceInternalGameSelect_set(1);
+#endif
 
-
+    gpio_set_level(GPIO_NUM_2, 0);
     // Set menu application
     odroid_system_application_set(0);
-
-
     // Reset
     esp_restart();
 }
@@ -554,7 +562,7 @@ size_t odroid_retro_audio_sample_batch_t(const int16_t *data, size_t frames) {
    return 0;
 }
 
-    uint16_t powerFrameCount;
+    uint16_t menuButtonFrameCount;
     odroid_gamepad_state previousState;
     bool ignoreMenuButton, menu_restart;
     
@@ -595,19 +603,31 @@ void process_keys(odroid_gamepad_state *joystick)
 
         if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && joystick->values[ODROID_INPUT_MENU])
         {
-            ++powerFrameCount;
+            ++menuButtonFrameCount;
         }
         else
         {
-            powerFrameCount = 0;
+            menuButtonFrameCount = 0;
         }
 
         // Note: this will cause an exception on 2nd Core in Debug mode
-        if (powerFrameCount > 60 * 2)
+        /*
+        if (menuButtonFrameCount > 60 * 2)
         {
             // Turn Blue LED on. Power state change turns it off
             odroid_system_led_set(1);
             PowerDown();
+        }
+        */
+        
+        if (menuButtonFrameCount > 60 * 1)
+        {
+            DoMenuHome(true);
+        }
+        
+        if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && !joystick->values[ODROID_INPUT_MENU])
+        {
+            DoMenuHome(false);
         }
 
         if (joystick->values[ODROID_INPUT_VOLUME] || menu_restart)
@@ -628,12 +648,6 @@ void process_keys(odroid_gamepad_state *joystick)
               //odroid_display_unlock();
             }
         }
-
-        if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && !joystick->values[ODROID_INPUT_MENU])
-        {
-            DoHome();
-        }
-
 
         // Scaling
         if (joystick->values[ODROID_INPUT_START] && !previousState.values[ODROID_INPUT_RIGHT] && joystick->values[ODROID_INPUT_RIGHT])
@@ -779,7 +793,7 @@ void dump_heap_info_short() {
 
 void app_loop(void)
 {
-    powerFrameCount = 0;
+    menuButtonFrameCount = 0;
     menu_restart = false;
     odroid_input_gamepad_read(&previousState);
     ignoreMenuButton = previousState.values[ODROID_INPUT_MENU];
@@ -858,8 +872,8 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
     gpio_config(&io_conf);
     gpio_set_level(LCD_PIN_NUM_CS, 1);
 
-
-    switch (esp_sleep_get_wakeup_cause())
+    esp_sleep_source_t cause = esp_sleep_get_wakeup_cause();
+    switch (cause)
     {
         case ESP_SLEEP_WAKEUP_EXT0:
         {
@@ -873,7 +887,7 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
         case ESP_SLEEP_WAKEUP_ULP:
         case ESP_SLEEP_WAKEUP_UNDEFINED:
         {
-            printf("app_main: Unexpected deep sleep reset\n");
+            printf("app_main: Unexpected deep sleep reset: %d\n", cause);
 
             odroid_gamepad_state bootState = odroid_input_read_raw();
 
@@ -893,7 +907,7 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
             {
                 // Reset emulator if button held at startup to
                 // override save state
-                forceConsoleReset = true; //emu_reset();
+                forceConsoleReset = true;
             }
         }
             break;

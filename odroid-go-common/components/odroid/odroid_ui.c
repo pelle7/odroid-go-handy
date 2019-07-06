@@ -624,7 +624,17 @@ char *odroid_ui_choose_file(const char *path, const char *ext) {
         } else {
             odroid_gamepad_state joystick;
             odroid_input_gamepad_read(&joystick);
-            if (!joystick.values[ODROID_INPUT_SELECT]) {
+            bool choose = joystick.values[ODROID_INPUT_SELECT];
+
+#ifdef MY_LYNX_INTERNAL_GAME_SELECT
+            if (odroid_settings_ForceInternalGameSelect_get())
+            {
+                odroid_settings_ForceInternalGameSelect_set(0);
+                choose=true;
+            }
+#endif
+            
+            if (!choose) {
                return selected_file;
             }
         }
@@ -693,11 +703,12 @@ char *odroid_ui_choose_file(const char *path, const char *ext) {
     int selected = 0;
     int last_key = -1;
     bool run = true;
-    
+    /*
     for (int i = 0;i < count; i++) {
         char *file = (char*)entries_refs[i];
         printf("%s\n", file);
     }
+    */
     
     if (selected_file) {
        for (int i = 0;i < count; i++) {
@@ -714,15 +725,21 @@ char *odroid_ui_choose_file(const char *path, const char *ext) {
        selected_file = NULL;
     }
     
+    uint8_t repeat = 0;
+    
     while (run)
     {
         odroid_gamepad_state joystick;
         odroid_input_gamepad_read(&joystick);
         
         if (last_key >= 0) {
-                if (!joystick.values[last_key]) {
-                    last_key = -1;
-                }
+            if (!joystick.values[last_key]) {
+                last_key = -1;
+                repeat = 0;
+            } else if (repeat++>6) {
+             repeat = 6;
+             last_key = -1;
+         }
         } else {
             if (joystick.values[ODROID_INPUT_B]) {
                 last_key = ODROID_INPUT_B;
@@ -744,28 +761,57 @@ char *odroid_ui_choose_file(const char *path, const char *ext) {
                     run = false;
             } else if (joystick.values[ODROID_INPUT_LEFT]) {
                 last_key = ODROID_INPUT_LEFT;
-                selected-=10;
-                if (selected<0) selected = 0;
+                char st = ((char*)entries_refs[selected])[0];
+                while (selected>0)
+                {
+                   selected--;
+                   if (st != ((char*)entries_refs[selected])[0]) break;
+                }
+                //selected-=10;
+                //if (selected<0) selected = 0;
             } else if (joystick.values[ODROID_INPUT_RIGHT]) {
                 last_key = ODROID_INPUT_RIGHT;
-                selected+=10;
-                if (selected>=count) selected = count - 1;
+                char st = ((char*)entries_refs[selected])[0];
+                while (selected<count-1)
+                {
+                   selected++;
+                   if (st != ((char*)entries_refs[selected])[0]) break;
+                }
+                //selected+=10;
+                //if (selected>=count) selected = count - 1;
             }
         }
         
         if (selected_last != selected) {
+            /*
             int x = 0;
             int y = 0;
-            //char *text = &entries_buffer[entries_refs[selected]];
             char *text = (char*)entries_refs[selected];
             draw_chars(x, y, 32, text, color_default, color_bg_default);
             printf("Selected: %d; %s\n", selected, text);
+            */
+            int x = 0;
+            for (int i = 0;i < 30; i++) {
+                int y = i * 8;
+                int entry = selected + i - 15;
+                char *text;
+                if (entry>=0 && entry < count)
+                {
+                    text = (char*)entries_refs[entry];
+                } else
+                {
+                    text = " ";
+                }
+                draw_chars(x, y, 39, text, entry==selected?color_selected:color_default, color_bg_default);
+            }
         }
-        usleep(50*1000UL);
+        usleep(20*1000UL);
         selected_last = selected;
     }
     wait_for_key(last_key);
-    draw_empty_line();
+    //draw_empty_line();
+    odroid_display_unlock();
+    ili9341_write_frame_lynx(NULL, NULL, false);
     //char *file = &entries_buffer[entries_refs[selected]];
     char *file = (char*)entries_refs[selected];
     char *rc = (char*)malloc(strlen(path) + 1+ strlen(file)+1);
@@ -773,7 +819,6 @@ char *odroid_ui_choose_file(const char *path, const char *ext) {
     strcat(rc, "/");
     strcat(rc, file);
     
-    odroid_display_unlock();
     if (entries_refs) heap_caps_free(entries_refs);
     if (entries_buffer) heap_caps_free(entries_buffer);
     odroid_settings_RomFilePath_set(rc);
@@ -813,6 +858,37 @@ void update_ui_fps() {
     // usleep(20*1000UL);
 }
 */
+
+bool odroid_ui_ask(const char *text)
+{
+    int len = strlen(text);
+    int x = (320 - (len*8))/2;
+    int y = 112;
+    draw_chars(x, y  , len, " ", color_default, color_bg_default);
+    draw_chars(x, y+ 8*1, len, text, color_selected, color_bg_default);
+    draw_chars(x, y+ 8*2, len, " ", color_selected, color_bg_default);
+    int last_key = -1;
+    bool rc = true;
+    while (1)
+    {
+        odroid_gamepad_state joystick;
+        odroid_input_gamepad_read(&joystick);
+        
+        if (joystick.values[ODROID_INPUT_A]) {
+            last_key = ODROID_INPUT_A;
+            rc = true;
+            break;
+        } else if (joystick.values[ODROID_INPUT_B]) {
+            last_key = ODROID_INPUT_B;
+            rc = false;
+            break;
+        }
+        
+        usleep(20*1000UL);
+    }
+    wait_for_key(last_key);
+    return rc;
+}
 
 void update_ui_fps_text(float fps) {
     sprintf(buf, "%2.2f", fps);
