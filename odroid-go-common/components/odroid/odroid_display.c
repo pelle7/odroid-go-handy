@@ -1282,6 +1282,21 @@ void odroid_display_lock()
     }
 }
 
+int odroid_display_lock_ext()
+{
+    if (!display_mutex)
+    {
+        display_mutex = xSemaphoreCreateMutex();
+        if (!display_mutex) return false;
+    }
+
+    if (xSemaphoreTake(display_mutex, 1000 / portTICK_RATE_MS) != pdTRUE)
+    {
+        return false;
+    }
+    return true;
+}
+
 void odroid_display_unlock()
 {
     if (!display_mutex) abort();

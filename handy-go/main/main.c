@@ -345,7 +345,7 @@ NOINLINE void DoMenuHome(bool save)
     odroid_input_gamepad_read(&joystick);
     if (!joystick.values[ODROID_INPUT_START] && !save)
     {
-       save = odroid_ui_ask(" Save current state? Yes=A ; No=B ");
+       save = odroid_ui_ask_v2(" Save current state?", color_selected, COLOR_RGB(1,2,5), 0)==0;
     }
     odroid_display_show_hourglass();
 
@@ -708,8 +708,9 @@ int16_t odroid_retro_input_state_t(unsigned port, unsigned device,
 #define FRAME_SKIP_PL1 3
 // Max speed
 //#define FRAME_SKIP_PL1 10
+
 // No frameskip
-//#undef FRAME_SKIP_PL1
+#undef FRAME_SKIP_PL1
 
 #ifdef FRAME_SKIP_PL1
 bool skipNextFrame = true;
@@ -734,11 +735,20 @@ void odroid_retro_video_refresh_t(const void *data, unsigned width,
 #endif
 }
 #else
-bool skipNextFrame = false;
+bool skipNextFrame = true;
 void odroid_retro_video_refresh_t(const void *data, unsigned width,
       unsigned height, size_t pitch) {
-      xQueueSend(vidQueue, &data, portMAX_DELAY);
-      update_ui_fps();
+     if (skipNextFrame)
+     {
+        skipNextFrame = false;
+     }
+     else
+     {
+        xQueueSend(vidQueue, &data, portMAX_DELAY);
+        skipNextFrame = true;
+     }
+     update_ui_fps();
+
 #ifdef MY_KEYS_IN_VIDEO
         odroid_gamepad_state joystick;   
         odroid_input_gamepad_read(&joystick);
@@ -798,6 +808,9 @@ void app_loop(void)
     odroid_input_gamepad_read(&previousState);
     ignoreMenuButton = previousState.values[ODROID_INPUT_MENU];
 
+    gAudioEnabled = 0;
+    odroid_settings_Volume_set(ODROID_VOLUME_LEVEL0);
+    
 #ifdef MY_RETRO_LOOP
     retro_run_endless();
 #else
