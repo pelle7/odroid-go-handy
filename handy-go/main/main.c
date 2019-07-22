@@ -389,6 +389,22 @@ odroid_ui_func_toggle_rc menu_lynx_audio_toggle(odroid_ui_entry *entry, odroid_g
     return ODROID_UI_FUNC_TOGGLE_RC_CHANGED;
 }
 
+#define FRAMESKIP_MAX 6
+uint8_t frameskip = 2;
+
+void menu_lynx_frameskip_update(odroid_ui_entry *entry) {
+    sprintf(entry->text, "%-9s: %d", "frameskip", frameskip - 1);
+}
+
+odroid_ui_func_toggle_rc menu_lynx_frameskip_toggle(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
+    if (joystick->values[ODROID_INPUT_A] || joystick->values[ODROID_INPUT_RIGHT]) {
+        if (frameskip<FRAMESKIP_MAX) frameskip++;
+    } else if (joystick->values[ODROID_INPUT_LEFT]) {
+        if (frameskip>2) frameskip--;
+    }
+    return ODROID_UI_FUNC_TOGGLE_RC_CHANGED;
+}
+
 void menu_lynx_rotate_update(odroid_ui_entry *entry) {
     switch (rotate)
     {
@@ -430,6 +446,7 @@ void menu_lynx_init(odroid_ui_window *window) {
     odroid_ui_create_entry(window, &menu_lynx_audio_update, &menu_lynx_audio_toggle);
     odroid_ui_create_entry(window, &menu_lynx_rotate_update, &menu_lynx_rotate_toggle);
     odroid_ui_create_entry(window, &menu_lynx_filtering_update, &menu_lynx_filtering_toggle);
+    odroid_ui_create_entry(window, &menu_lynx_frameskip_update, &menu_lynx_frameskip_toggle);
 }
 
 inline void update_ui_fps() {
@@ -704,22 +721,13 @@ int16_t odroid_retro_input_state_t(unsigned port, unsigned device,
 
 
 
-// Ok
-#define FRAME_SKIP_PL1 3
-// Max speed
-//#define FRAME_SKIP_PL1 10
-
-// No frameskip
-#undef FRAME_SKIP_PL1
-
-#ifdef FRAME_SKIP_PL1
 bool skipNextFrame = true;
 void odroid_retro_video_refresh_t(const void *data, unsigned width,
       unsigned height, size_t pitch) {
-	 if ((frame%FRAME_SKIP_PL1)==1) {
+	 if ((frame%frameskip)==1) {
      	xQueueSend(vidQueue, &data, portMAX_DELAY);
      	skipNextFrame = true;
-     } else if ((frame%FRAME_SKIP_PL1)==0) {
+     } else if ((frame%frameskip)==0) {
      	skipNextFrame = false;
      } else {
      	skipNextFrame = true;
@@ -734,30 +742,6 @@ void odroid_retro_video_refresh_t(const void *data, unsigned width,
         previousState = joystick;
 #endif
 }
-#else
-bool skipNextFrame = true;
-void odroid_retro_video_refresh_t(const void *data, unsigned width,
-      unsigned height, size_t pitch) {
-     if (skipNextFrame)
-     {
-        skipNextFrame = false;
-     }
-     else
-     {
-        xQueueSend(vidQueue, &data, portMAX_DELAY);
-        skipNextFrame = true;
-     }
-     update_ui_fps();
-
-#ifdef MY_KEYS_IN_VIDEO
-        odroid_gamepad_state joystick;   
-        odroid_input_gamepad_read(&joystick);
-        
-        process_keys(&joystick);
-        previousState = joystick;
-#endif
-}
-#endif
 
 void odroidgo_retro_init(void) {
 	printf("odroidgo_init\n");
@@ -807,9 +791,6 @@ void app_loop(void)
     menu_restart = false;
     odroid_input_gamepad_read(&previousState);
     ignoreMenuButton = previousState.values[ODROID_INPUT_MENU];
-
-    gAudioEnabled = 0;
-    odroid_settings_Volume_set(ODROID_VOLUME_LEVEL0);
     
 #ifdef MY_RETRO_LOOP
     retro_run_endless();
@@ -829,24 +810,33 @@ void app_loop(void)
 #endif
 }
 
+//#define VID_BUF_SIZE (160*102*2)
+#define VID_BUF_SIZE ((160/2+64)*102)
+
 NOINLINE void app_init(void)
 {
 printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
     // ESP_ERROR_CHECK( heap_trace_init_standalone(trace_record, NUM_RECORDS) );
     
-    framebuffer[0] = heap_caps_malloc(160 * 102 * 2, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+    framebuffer[0] = heap_caps_malloc(VID_BUF_SIZE, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+    //framebuffer[0] = MY_MEM_ALLOC_SLOW_EXT(uint16_t, VID_BUF_SIZE, 1); // slower
     if (!framebuffer[0]) abort();
     printf("app_main: framebuffer[0]=%p\n", framebuffer[0]);
 
-    framebuffer[1] = heap_caps_malloc(160 * 102 * 2, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+    framebuffer[1] = heap_caps_malloc(VID_BUF_SIZE, MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+    //framebuffer[1] = MY_MEM_ALLOC_SLOW_EXT(uint16_t, VID_BUF_SIZE, 1); // slower
     if (!framebuffer[1]) abort();
     printf("app_main: framebuffer[1]=%p\n", framebuffer[1]);
-    
-    //audio_update1.buffer = MY_MEM_ALLOC_FAST_EXT(unsigned short, AUDIO_BUFFER_SIZE, 1);
-    //audio_update2.buffer = MY_MEM_ALLOC_FAST_EXT(unsigned short, AUDIO_BUFFER_SIZE, 1);
-    audio_update1.buffer = MY_MEM_ALLOC_FAST_EXT(short, AUDIO_BUFFER_SIZE, 1);
-    audio_update2.buffer = MY_MEM_ALLOC_FAST_EXT(short, AUDIO_BUFFER_SIZE, 1);
-    
+
+
+    audio_update1.buffer = MY_MEM_ALLOC_SLOW_EXT(short, AUDIO_BUFFER_SIZE, 1);
+    //audio_update1.buffer = heap_caps_malloc(AUDIO_BUFFER_SIZE, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); // slower?
+    if (!audio_update1.buffer) abort();
+
+    audio_update2.buffer = MY_MEM_ALLOC_SLOW_EXT(short, AUDIO_BUFFER_SIZE, 1);
+    //audio_update2.buffer = heap_caps_malloc(AUDIO_BUFFER_SIZE, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); // slower?
+    if (!audio_update2.buffer) abort();
+
     gAudioBuffer = audio_update1.buffer;
 #ifdef MY_AUDIO_MODE_V1
     gAudioBufferPointer2 = gAudioBuffer;
@@ -1012,6 +1002,13 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
     scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_SMS) ? false : true;
     
     odroid_ui_debug_enter_loop();
+#ifdef MY_DEBUG_OUT
+    printf("heap_caps metadata test\n");
+    heap_caps_print_heap_info(MALLOC_CAP_8BIT);
+    heap_caps_print_heap_info(MALLOC_CAP_32BIT);
+    heap_caps_print_heap_info(MALLOC_CAP_INTERNAL);
+#endif
+    
     startTime = xthal_get_ccount();
     
     dump_heap_info_short();
@@ -1120,6 +1117,7 @@ void SaveState()
             buf[1] = scaling_enabled&0xff;
             buf[2] = filtering&0xff;
             buf[3] = rotate&0xff;
+            buf[4] = frameskip;
             fwrite(buf,sizeof(uint8_t),8,f);
         }
         QuickSaveState(f);
@@ -1164,6 +1162,8 @@ void LoadState(const char* cartName)
                 scaling_enabled = buf[1];
                 filtering = buf[2];
                 rotate = buf[3];
+                frameskip = buf[4];
+                if (frameskip == 0) frameskip = 2;
             }
             QuickLoadState(f);
             fclose(f);

@@ -184,7 +184,7 @@ enum
    MIKIE_PIXEL_FORMAT_RAW,
 };
 
-#define MIKIE_INLINE_Update
+//#define MIKIE_INLINE_Update // slower
 #define MIKIE_INLINE_UpdateSound
 #define MIKIE_INLINE_UpdateCalcSound
 // #define MIKIE_INLINE_DisplayRenderLine // negativ performance

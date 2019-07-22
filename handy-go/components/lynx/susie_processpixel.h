@@ -77,7 +77,7 @@
          {
             if(!mSPRCOLL_Collide && !mSPRSYS_NoCollide)
             {
-               int collision=ReadCollision(hoff);
+               ULONG collision=ReadCollision(hoff);
                if(collision>mCollision)
                {
                   mCollision=collision;
@@ -103,7 +103,7 @@
             WritePixel(hoff,pixel);
             if(!mSPRCOLL_Collide && !mSPRSYS_NoCollide)
             {
-               int collision=ReadCollision(hoff);
+               ULONG collision=ReadCollision(hoff);
                if(collision>mCollision)
                {
                   mCollision=collision;
@@ -132,7 +132,7 @@
          {
             if(!mSPRCOLL_Collide && !mSPRSYS_NoCollide)
             {
-               int collision=ReadCollision(hoff);
+               ULONG collision=ReadCollision(hoff);
                if(collision>mCollision)
                {
                   mCollision=collision;
@@ -161,7 +161,7 @@
          {
             if(!mSPRCOLL_Collide && !mSPRSYS_NoCollide)
             {
-               int collision=ReadCollision(hoff);
+               ULONG collision=ReadCollision(hoff);
                if(collision>mCollision)
                {
                   mCollision=collision;
@@ -190,7 +190,7 @@
          {
             if(!mSPRCOLL_Collide && !mSPRSYS_NoCollide && pixel!=0x0e)
             {
-               int collision=ReadCollision(hoff);
+               ULONG collision=ReadCollision(hoff);
                if(collision>mCollision)
                {
                   mCollision=collision;

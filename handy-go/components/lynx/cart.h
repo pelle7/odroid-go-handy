@@ -48,6 +48,8 @@
 #define EPYX_HEADER_OLD 512
 #define EPYX_HEADER_NEW 410
 
+#include "myadd.h"
+
 #ifndef __max
 #define __max(a,b) \
    ({ __typeof__ (a) _a = (a); \
@@ -120,7 +122,6 @@ class CCart : public CLynxBase
       bool	ContextLoadLegacy(LSS_FILE *fp);
 
       void	Poke(ULONG addr,UBYTE data);
-      UBYTE	Peek(ULONG addr);
       //ULONG	ReadCycle(void) {return 15;};
       //ULONG	WriteCycle(void) {return 15;};
       void	BankSelect(EMMODE newbank) {mBank=newbank;}
@@ -137,14 +138,144 @@ class CCart : public CLynxBase
       // cartridge emulation hardware
       void	CartAddressStrobe(bool strobe);
       void	CartAddressData(bool data);
+
+#ifdef MY_CART_INLINE
+
+      inline void Poke0(UBYTE data)
+{
+   if(mWriteEnableBank0)
+   {
+      ULONG address=(mShifter<<mShiftCount0)+(mCounter&mCountMask0);
+      mCartBank0[address&mMaskBank0]=data;
+   }
+   if(!mStrobe)
+   {
+      mCounter++;
+      mCounter&=0x07ff;
+   }
+}
+
+inline void Poke0A(UBYTE data)
+{
+    if(mWriteEnableBank0)
+    {
+        ULONG address=(mShifter<<mShiftCount0)+(mCounter&mCountMask0);
+        mCartBank0A[address&mMaskBank0]=data;       
+    }
+    if(!mStrobe)
+    {
+        mCounter++;
+        mCounter&=0x07ff;
+    }
+}
+
+inline void Poke1(UBYTE data)
+{
+   if(mWriteEnableBank1)
+   {
+      ULONG address=(mShifter<<mShiftCount1)+(mCounter&mCountMask1);
+      mCartBank1[address&mMaskBank1]=data;
+   }
+   if(!mStrobe)
+   {
+      mCounter++;
+      mCounter&=0x07ff;
+   }
+}
+
+inline void Poke1A(UBYTE data)
+{
+    if(mWriteEnableBank1)
+    {
+        ULONG address=(mShifter<<mShiftCount1)+(mCounter&mCountMask1);
+        mCartBank1A[address&mMaskBank1]=data;       
+    }
+    if(!mStrobe)
+    {
+        mCounter++;
+        mCounter&=0x07ff;
+    }
+}
+
+inline UBYTE Peek0(void)
+{
+   ULONG address=(mShifter<<mShiftCount0)+(mCounter&mCountMask0);
+   UBYTE data=mCartBank0[address&mMaskBank0];
+
+   if(!mStrobe)
+   {
+      mCounter++;
+      mCounter&=0x07ff;
+   }
+
+   return data;
+}
+
+inline UBYTE Peek0A(void)
+{
+    ULONG address=(mShifter<<mShiftCount0)+(mCounter&mCountMask0);
+    UBYTE data=mCartBank0A[address&mMaskBank0];     
+
+    if(!mStrobe)
+    {
+        mCounter++;
+        mCounter&=0x07ff;
+    }
+
+    return data;
+}
+
+inline UBYTE Peek1(void)
+{
+   ULONG address=(mShifter<<mShiftCount1)+(mCounter&mCountMask1);
+   UBYTE data=mCartBank1[address&mMaskBank1];
+
+   if(!mStrobe)
+   {
+      mCounter++;
+      mCounter&=0x07ff;
+   }
+
+   return data;
+}
+
+inline UBYTE Peek1A(void)
+{
+    ULONG address=(mShifter<<mShiftCount1)+(mCounter&mCountMask1);
+    UBYTE data=mCartBank1A[address&mMaskBank1];     
+
+    if(!mStrobe)
+    {
+                mCounter++;
+        mCounter&=0x07ff;
+    }
+
+    return data;
+}
+
+inline UBYTE Peek(ULONG addr)
+{
+   if(mBank==bank0)
+   {
+      return(mCartBank0[addr&mMaskBank0]);
+   }
+   else
+   {
+      return(mCartBank1[addr&mMaskBank1]);
+   }
+}
+
+#else
       void	Poke0(UBYTE data);
       void	Poke1(UBYTE data);
       void	Poke0A(UBYTE data);
       void	Poke1A(UBYTE data);
+      UBYTE Peek(ULONG addr);
       UBYTE	Peek0(void);
       UBYTE	Peek1(void);
       UBYTE	Peek0A(void);
       UBYTE	Peek1A(void);
+#endif
 
       void SetShifterValue(UBYTE a){mShifter=a; mCounter=0;}; // for fake bios
    inline ULONG GetCounterValue(void)

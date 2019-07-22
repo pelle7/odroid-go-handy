@@ -2,6 +2,21 @@
 #define MYADD_H
 
 #include <stdlib.h>
+#include "esp_attr.h"
+
+#define MY_CPU_V2
+#define MY_CART_INLINE
+
+//#define MY_DEBUG_OUT
+
+#ifdef MY_DEBUG_OUT
+extern int my_debug_count;
+extern int mikie_susie_paint;
+extern int mikie_poke;
+extern int mikie_peek;
+extern int cpu_update;
+extern int cpu_calls[];
+#endif
 
 //#define MY_HANDY_CPU
 
@@ -27,8 +42,8 @@
 // 2: Not correct
 #define MY_SYSTEM_LOOP 2
 
-// #define MY_MEM_MODE
-#define MY_MEM_MODE_V2
+#define MY_MEM_MODE
+// #define MY_MEM_MODE_V2 // a little bit slower as MY_MEM_MODE?
 
 #define MY_AUDIO_MODE 2
 

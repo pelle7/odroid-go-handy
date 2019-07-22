@@ -442,7 +442,7 @@ void CSusie::ProcessPixel(ULONG hoff,ULONG pixel)
 }
 #endif
 
-
+// without IRAM_ATTR better
 void CSusie::Poke(ULONG addr,UBYTE data)
 {
    switch(addr&0xff)

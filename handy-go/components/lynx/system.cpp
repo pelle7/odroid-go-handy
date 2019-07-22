@@ -324,6 +324,17 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
       printf("filename %d %s %s\n",mCart->mEEPROMType,gamefile,eepromfile);
       mEEPROM->Load();
    }
+#ifdef MY_DEBUG_OUT
+   printf("%-20s: %ps\n", "system.var", &mCycleCountBreakpoint);
+   printf("%-20s: %ps\n", "system.mCart", mCart);
+   printf("%-20s: %ps\n", "system.mRom", mRom);
+   printf("%-20s: %ps\n", "system.mMemMap", mMemMap);
+   printf("%-20s: %ps\n", "system.mRam", mRam);
+   printf("%-20s: %ps\n", "system.mCpu", mCpu);
+   printf("%-20s: %ps\n", "system.mMikie", mMikie);
+   printf("%-20s: %ps\n", "system.mSusie", mSusie);
+   printf("%-20s: %ps\n", "system.mEEPROM", mEEPROM);
+#endif
 }
 
 void CSystem::SaveEEPROM(void)
@@ -429,7 +440,7 @@ void CSystem::Reset(void)
    gCPUBootAddress=0;
    gBreakpointHit=FALSE;
    gSingleStepMode=FALSE;
-   gSingleStepModeSprites=FALSE;
+   //gSingleStepModeSprites=FALSE;
    gSystemIRQ=FALSE;
    gSystemNMI=FALSE;
    gSystemCPUSleep=FALSE;

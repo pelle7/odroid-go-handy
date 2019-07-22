@@ -1,6 +1,6 @@
-   int  sprcount=0;
-   int data=0;
-   int everonscreen=0;
+   ULONG sprcount=0;
+   ULONG data=0;
+   bool everonscreen=0;
 
    TRACE_SUSIE0("                                                              ");
    TRACE_SUSIE0("                                                              ");
@@ -216,7 +216,12 @@
 
          bool superclip=FALSE;
          int quadrant=0;
+#ifdef SUSIE_SIGN_MODE
+        UWORD hsign;
+        int vsign;
+#else
          int hsign,vsign;
+#endif
 #ifdef MY_NO_STATIC
          int vquadflip[4]={1,0,3,2};
          int hquadflip[4]={3,2,1,0};
@@ -262,16 +267,23 @@
             bool render=FALSE;
 
             // Set quadrand multipliers
+#ifdef SUSIE_SIGN_MODE
+            hsign=(quadrant==0 || quadrant==1)?1:0;
+            vsign=(quadrant==0 || quadrant==3)?1:-1;
+#else
             hsign=(quadrant==0 || quadrant==1)?1:-1;
             vsign=(quadrant==0 || quadrant==3)?1:-1;
-
+#endif
             // Preflip      TRACE_SUSIE2("PaintSprites() hsign=%d vsign=%d",hsign,vsign);
 
             //Use h/v flip to invert v/hsign
-
+#ifdef SUSIE_SIGN_MODE
+            if(mSPRCTL0_Vflip) vsign=-vsign;
+            if(mSPRCTL0_Hflip) hsign=(hsign+1)%2;
+#else
             if(mSPRCTL0_Vflip) vsign=-vsign;
             if(mSPRCTL0_Hflip) hsign=-hsign;
-
+#endif
             TRACE_SUSIE2("PaintSprites() Hflip=%d Vflip=%d",mSPRCTL0_Hflip,mSPRCTL0_Vflip);
             TRACE_SUSIE2("PaintSprites() Hsign=%d   Vsign=%d",hsign,vsign);
             TRACE_SUSIE2("PaintSprites() Hpos =%04x Vpos =%04x",mHPOSSTRT.Word,mVPOSSTRT.Word);
@@ -338,9 +350,9 @@
 
             TRACE_SUSIE1("PaintSprites() Render status %d",render);
 #ifdef MY_NO_STATIC
-             int pixel_height=0;
-             int pixel_width=0;
-             int pixel=0;
+             ULONG pixel_height=0;
+             ULONG pixel_width=0;
+             ULONG pixel=0;
              int hoff=0,voff=0;
              int hloop=0,vloop=0;
              bool onscreen=0;
@@ -421,12 +433,70 @@
                         // fixes the squashed look on the multi-quad sprites.
                         //                              if(hsign==-1 && loop>0) hoff+=hsign;
                         if(loop==0) hquadoff=hsign;
+#ifdef SUSIE_SIGN_MODE
+                        if(hsign!=hquadoff) hoff+=hsign==0?-1:1;
+#else
                         if(hsign!=hquadoff) hoff+=hsign;
+#endif
 
                         // Initialise our line
                         LineInit(voff);
                         onscreen=FALSE;
 
+#ifdef SUSIE_SIGN_MODE
+if (hsign==0)
+{
+                    // Now render an individual destination line
+                    while((pixel=LineGetPixel())!=LINE_END)
+                    {
+                       // This is allowed to update every pixel
+                       mHSIZACUM.Word+=mSPRHSIZ.Word;
+                       pixel_width=mHSIZACUM.Byte.High;
+                       mHSIZACUM.Byte.High=0;
+
+                       for(hloop=0;hloop<pixel_width;hloop++)
+                       {
+                          // Draw if onscreen but break loop on transition to offscreen
+                          if(hoff<200)
+                          {
+                             ProcessPixel(hoff,pixel);
+                             onscreen=everonscreen=TRUE;
+                          }
+                          else
+                          {
+                             if(onscreen) break;
+                          }
+                          hoff--;
+                       }
+                    }
+}
+else
+{
+                    // Now render an individual destination line
+                    while((pixel=LineGetPixel())!=LINE_END)
+                    {
+                       // This is allowed to update every pixel
+                       mHSIZACUM.Word+=mSPRHSIZ.Word;
+                       pixel_width=mHSIZACUM.Byte.High;
+                       mHSIZACUM.Byte.High=0;
+
+                       for(hloop=0;hloop<pixel_width;hloop++)
+                       {
+                          // Draw if onscreen but break loop on transition to offscreen
+                          if(hoff<SCREEN_WIDTH)
+                          {
+                             ProcessPixel(hoff,pixel);
+                             onscreen=everonscreen=TRUE;
+                          }
+                          else
+                          {
+                             if(onscreen) break;
+                          }
+                          hoff++;
+                       }
+                    }
+}
+#else
                         // Now render an individual destination line
                         while((pixel=LineGetPixel())!=LINE_END)
                         {
@@ -450,6 +520,7 @@
                               hoff+=hsign;
                            }
                         }
+#endif
                      }
                      voff+=vsign;
 
@@ -536,12 +607,12 @@
          }
 
          // Perform Sprite debugging if required, single step on sprite draw
-         if(gSingleStepModeSprites)
-         {
-            char message[256];
-            sprintf(message,"CSusie:PaintSprites() - Rendered Sprite %03d",sprcount);
-            if(!gError->Warning(message)) gSingleStepModeSprites=0;
-         }
+         //if(gSingleStepModeSprites)
+         //{
+         //   char message[256];
+         //   sprintf(message,"CSusie:PaintSprites() - Rendered Sprite %03d",sprcount);
+         //   if(!gError->Warning(message)) gSingleStepModeSprites=0;
+         //}
       }
       else
       {

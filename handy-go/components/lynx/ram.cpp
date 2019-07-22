@@ -99,6 +99,10 @@ CRam::CRam(UBYTE *filememory,ULONG filesize)
    // Reset will cause the loadup
 
    Reset();
+
+#ifdef MY_DEBUG_OUT
+   printf("%-20s: %ps\n", "ram", &mFileSize);
+#endif
 }
 
 CRam::~CRam()

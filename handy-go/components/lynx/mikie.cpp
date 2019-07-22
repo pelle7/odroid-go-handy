@@ -98,6 +98,10 @@ void CMikie::BlowOut(void)
    for(loop=0;loop<4096;loop++) mColourMap[loop]=0;
 
    Reset();
+
+#ifdef MY_DEBUG_OUT
+   printf("%-20s: %ps\n", "mikie", &mDisplayAddress);
+#endif
 }
 
 CMikie::~CMikie()
@@ -948,6 +952,9 @@ ULONG CMikie::DisplayEndOfFrame(void)
 
 void CMikie::Poke(ULONG addr,UBYTE data)
 {
+#ifdef MY_DEBUG_OUT
+    mikie_poke++;
+#endif
    switch(addr&0xff)
    {
       case (TIM0BKUP&0xff):
@@ -1628,6 +1635,9 @@ void CMikie::Poke(ULONG addr,UBYTE data)
             TRACE_MIKIE0("*********************************************************");
             TRACE_MIKIE0("****               CPU SLEEP STARTED                 ****");
             TRACE_MIKIE0("*********************************************************");
+#ifdef MY_DEBUG_OUT
+            mikie_susie_paint++;
+#endif
             SLONG cycles_used=(SLONG)mSystem.PaintSprites();
             gCPUWakeupTime=gSystemCycleCount+cycles_used;
             SetCPUSleep();
@@ -1760,7 +1770,9 @@ void CMikie::Poke(ULONG addr,UBYTE data)
 UBYTE CMikie::Peek(ULONG addr)
 {
    /* Timer control registers */
-
+#ifdef MY_DEBUG_OUT
+   mikie_peek++;
+#endif
    switch(addr & 0xff)
    {
       case (TIM0BKUP&0xff):
@@ -2296,7 +2308,7 @@ UBYTE CMikie::Peek(ULONG addr)
 }
 
 #ifndef MIKIE_INLINE_Update
-void CMikie::Update(void)
+void IRAM_ATTR CMikie::Update(void)
 {
 #include "mikie_update.h"
 }

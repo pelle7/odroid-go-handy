@@ -329,6 +329,7 @@ typedef struct
    };
 }TMATHNP;
 
+//#define SUSIE_SIGN_MODE // buggy
 #define SUSIE_INLINE_PaintSprites
 //#define SUSIE_INLINE_PROCESSPIXEL // negativ performance
 
@@ -346,6 +347,28 @@ typedef struct
 #define RAM_PEEK(m)             (mRamPointer[(m)])
 #define RAM_PEEKW(m)            (mRamPointer[(m)]+(mRamPointer[(m)+1]<<8))
 #define RAM_POKE(m1,m2)         {mRamPointer[(m1)]=(m2);}
+
+
+#define MY_GET_BITS(retval_bits, bits) \
+     /* ULONG retval_bits; */ \
+   if(mLinePacketBitsLeft<=bits) retval_bits = 0; \
+   else \
+   { \
+   if(mLineShiftRegCount<bits) \
+   { \
+      mLineShiftReg<<=24; \
+      mLineShiftReg|=RAM_PEEK(mTMPADR.Word++)<<16; \
+      mLineShiftReg|=RAM_PEEK(mTMPADR.Word++)<<8; \
+      mLineShiftReg|=RAM_PEEK(mTMPADR.Word++); \
+      mLineShiftRegCount+=24; \
+      cycles_used+=3*SPR_RDWR_CYC; \
+   } \
+   retval_bits=mLineShiftReg>>(mLineShiftRegCount-bits); \
+   retval_bits&=(1<<bits)-1; \
+   mLineShiftRegCount-=bits; \
+   mLinePacketBitsLeft-=bits; \
+   }
+
 
 class CSusie : public CLynxBase
 {

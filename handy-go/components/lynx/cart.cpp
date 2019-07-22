@@ -440,20 +440,6 @@ inline void CCart::Poke(ULONG addr, UBYTE data)
    }
 }
 
-
-inline UBYTE CCart::Peek(ULONG addr)
-{
-   if(mBank==bank0)
-   {
-      return(mCartBank0[addr&mMaskBank0]);
-   }
-   else
-   {
-      return(mCartBank1[addr&mMaskBank1]);
-   }
-}
-
-
 void CCart::CartAddressStrobe(bool strobe)
 {
    static int last_strobe=0;
@@ -484,6 +470,7 @@ void CCart::CartAddressData(bool data)
    mAddrData=data;
 }
 
+#ifndef MY_CART_INLINE
 
 void CCart::Poke0(UBYTE data)
 {
@@ -596,4 +583,19 @@ UBYTE CCart::Peek1A(void)
 
 	return data;
 }
+
+UBYTE CCart::Peek(ULONG addr)
+{
+   if(mBank==bank0)
+   {
+      return(mCartBank0[addr&mMaskBank0]);
+   }
+   else
+   {
+      return(mCartBank1[addr&mMaskBank1]);
+   }
+}
+
+#endif
+
 

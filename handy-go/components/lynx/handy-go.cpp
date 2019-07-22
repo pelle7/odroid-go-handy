@@ -103,6 +103,15 @@ VAR_S map btn_map_rot_90[] = {
 
 VAR_S map* btn_map;
 
+#ifdef MY_DEBUG_OUT
+int my_debug_count;
+int mikie_susie_paint;
+int mikie_poke;
+int mikie_peek;
+int cpu_update;
+int cpu_calls[256];
+#endif
+
 unsigned retro_api_version(void)
 {
    return RETRO_API_VERSION;
@@ -115,6 +124,14 @@ void my_test(void)
 
 void retro_init(void)
 {
+#ifdef MY_DEBUG_OUT
+ mikie_susie_paint = 0;
+ my_debug_count = 0;
+ mikie_poke = 0;
+ mikie_peek = 0;
+ cpu_update = 0;
+ memset(cpu_calls,0, 256 * 4);
+#endif
    printf("retro_init: start\n");
    struct retro_log_callback log;
    printf("retro_init: 001\n");
@@ -299,6 +316,29 @@ FUNC_S UBYTE* lynx_display_callback(ULONG objref)
 #endif
 #ifdef MY_KEYS_IN_VIDEO
    lynx_input();
+
+#ifdef MY_DEBUG_OUT
+   if (my_debug_count++>60)
+   {
+   my_debug_count = 0;
+   printf("Debug: mikie_susie_paint=%d, mikie_poke=%d, mikie_peek=%d, cpu=%d\n", mikie_susie_paint, mikie_poke, mikie_peek, cpu_update);
+   for (int i = 0; i<16;i++)
+   {
+    int offset = i*16;
+    printf("0x%02X %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d\n",
+      offset, cpu_calls[offset+0], cpu_calls[offset+1], cpu_calls[offset+2], cpu_calls[offset+3],
+      cpu_calls[offset+4], cpu_calls[offset+5], cpu_calls[offset+6], cpu_calls[offset+7],
+      cpu_calls[offset+8], cpu_calls[offset+9], cpu_calls[offset+10], cpu_calls[offset+11],
+      cpu_calls[offset+12], cpu_calls[offset+13], cpu_calls[offset+14], cpu_calls[offset+15]
+    );
+   }
+   mikie_susie_paint = 0;
+   mikie_poke = 0;
+    mikie_peek = 0;
+    cpu_update = 0;
+    memset(cpu_calls,0, 256 * 4);
+   }
+#endif
 #endif
    return (UBYTE*)framebuffer[current_framebuffer];
 }

@@ -46,19 +46,25 @@
 // Addressing mode decoding
 //
 
-#define	xIMMEDIATE()			{mOperand=mPC;mPC++;}
-#define	xABSOLUTE()				{mOperand=CPU_PEEKW(mPC);mPC+=2;}
-#define xZEROPAGE()				{mOperand=CPU_PEEK(mPC);mPC++;}
-#define xZEROPAGE_X()			{mOperand=CPU_PEEK(mPC)+mX;mPC++;mOperand&=0xff;}
-#define xZEROPAGE_Y()			{mOperand=CPU_PEEK(mPC)+mY;mPC++;mOperand&=0xff;}
-#define xABSOLUTE_X()			{mOperand=CPU_PEEKW(mPC);mPC+=2;mOperand+=mX;mOperand&=0xffff;}
-#define	xABSOLUTE_Y()			{mOperand=CPU_PEEKW(mPC);mPC+=2;mOperand+=mY;mOperand&=0xffff;}
-#define xINDIRECT_ABSOLUTE_X()	{mOperand=CPU_PEEKW(mPC);mPC+=2;mOperand+=mX;mOperand&=0xffff;mOperand=CPU_PEEKW(mOperand);}
-#define xRELATIVE()				{mOperand=CPU_PEEK(mPC);mPC++;mOperand=(mPC+mOperand)&0xffff;}
-#define xINDIRECT_X()			{mOperand=CPU_PEEK(mPC);mPC++;mOperand=mOperand+mX;mOperand&=0x00ff;mOperand=CPU_PEEKW(mOperand);}
-#define xINDIRECT_Y()			{mOperand=CPU_PEEK(mPC);mPC++;mOperand=CPU_PEEKW(mOperand);mOperand=mOperand+mY;mOperand&=0xffff;}
-#define xINDIRECT_ABSOLUTE()	{mOperand=CPU_PEEKW(mPC);mPC+=2;mOperand=CPU_PEEKW(mOperand);}
-#define xINDIRECT()				{mOperand=CPU_PEEK(mPC);mPC++;mOperand=CPU_PEEKW(mOperand);}
+//#define CPU_MPC_PL1 if (mPC==0xfc00-1) printf("Switch regions!!!\n"); mPC++
+//#define CPU_MPC_PL2 if (mPC==0xfc00-1) printf("Switch regions!!!\n"); mPC+=2
+
+#define CPU_MPC_PL1 mPC++
+#define CPU_MPC_PL2 mPC+=2
+
+#define	xIMMEDIATE()			{mOperand=mPC;CPU_MPC_PL1;}
+#define	xABSOLUTE()				{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEKW_mPC;CPU_MPC_PL2;}
+#define xZEROPAGE()				{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEK_mPC;CPU_MPC_PL1;}
+#define xZEROPAGE_X()			{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEK_mPC+mX;CPU_MPC_PL1;mOperand&=0xff;}
+#define xZEROPAGE_Y()			{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEK_mPC+mY;CPU_MPC_PL1;mOperand&=0xff;}
+#define xABSOLUTE_X()			{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEKW_mPC;CPU_MPC_PL2;mOperand+=mX;mOperand&=0xffff;}
+#define	xABSOLUTE_Y()			{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEKW_mPC;CPU_MPC_PL2;mOperand+=mY;mOperand&=0xffff;}
+#define xINDIRECT_ABSOLUTE_X()	{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEKW_mPC;CPU_MPC_PL2;mOperand+=mX;mOperand&=0xffff;mOperand=CPU_PEEKW(mOperand);}
+#define xRELATIVE()				{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEK_mPC;CPU_MPC_PL1;mOperand=(mPC+mOperand)&0xffff;}
+#define xINDIRECT_X()			{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEK_mPC;CPU_MPC_PL1;mOperand=mOperand+mX;mOperand&=0x00ff;mOperand=CPU_PEEKW(mOperand);}
+#define xINDIRECT_Y()			{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEK_mPC;CPU_MPC_PL1;mOperand=CPU_PEEKW(mOperand);mOperand=mOperand+mY;mOperand&=0xffff;}
+#define xINDIRECT_ABSOLUTE()	{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEKW_mPC;CPU_MPC_PL2;mOperand=CPU_PEEKW(mOperand);}
+#define xINDIRECT()				{CPU_PEEK_mPC_CHECK mOperand=CPU_PEEK_mPC;CPU_MPC_PL1;mOperand=CPU_PEEKW(mOperand);}
 
 //
 // Helper Macros
@@ -69,8 +75,8 @@
 #define SET_Z(m)				{ mZ=!(m); }
 #define SET_N(m)				{ mN=(m)&0x80; }
 #define SET_NZ(m)				{ mZ=!(m); mN=(m)&0x80; }
-#define PULL(m)					{ mSP++; mSP&=0xff; m=CPU_PEEK(mSP+0x0100); }
-#define PUSH(m)					{ CPU_POKE(0x0100+mSP,m); mSP--; mSP&=0xff; }
+#define PULL(m)					{ mSP++; mSP&=0xff; m=CPU_PEEK_RAM(mSP+0x0100); }
+#define PUSH(m)					{ CPU_POKE_RAM(0x0100+mSP,m); mSP--; mSP&=0xff; }
 //
 // Opcode execution 
 //
@@ -155,53 +161,68 @@
 	SET_NZ(mA);\
 }
 
-#define xBCC()\
+#define BRANCH_V1(reg) \
 {\
-	if(!mC)\
-	{\
-		int offset=(signed char)CPU_PEEK(mPC);\
-		mPC++;\
-		mPC+=offset;\
-		mPC&=0xffff;\
-	}\
-	else\
-	{\
-		mPC++;\
-		mPC&=0xffff;\
-	}\
+    if(reg)\
+    {\
+        CPU_PEEK_mPC_CHECK\
+        int offset=(signed char)CPU_PEEK_mPC;\
+        mPC++;\
+        mPC+=offset;\
+        mPC&=0xffff;\
+    }\
+    else\
+    {\
+        mPC++;\
+        mPC&=0xffff;\
+    }\
 }
 
-#define	xBCS()\
+#define BRANCH_v1(reg) \
 {\
-	if(mC)\
-	{\
-		int offset=(signed char)CPU_PEEK(mPC);\
-		mPC++;\
-		mPC+=offset;\
-		mPC&=0xffff;\
-	}\
-	else\
-	{\
-		mPC++;\
-		mPC&=0xffff;\
-	}\
+    /* ULONG old_region= mPC_region; */ \
+    if(reg)\
+    {\
+        CPU_PEEK_mPC_CHECK\
+        int offset=(signed char)CPU_PEEK_mPC;\
+        mPC++;\
+        mPC+=offset;\
+        mPC&=0xffff;\
+        /*CPU_UPDATE_mPC_region; */\
+    }\
+    else\
+    {\
+        mPC++;\
+        mPC&=0xffff;\
+        /* CPU_UPDATE_mPC_region; */ \
+    }\
+    /* if (old_region != mPC_region) printf("Region changed in branch!\n"); */ \
 }
 
-#define	xBEQ()\
+#define BRANCH_v2(reg) mPC = (reg?(mPC+1+(signed char)CPU_PEEK_mPC):mPC+1)&0xffff;
+
+#define BRANCH(reg) \
 {\
-	if(mZ)\
-	{\
-		int offset=(signed char)CPU_PEEK(mPC);\
-		mPC++;\
-		mPC+=offset;\
-		mPC&=0xffff;\
-	}\
-	else\
-	{\
-		mPC++;\
-		mPC&=0xffff;\
-	}\
+    if(reg)\
+    {\
+        CPU_PEEK_mPC_CHECK\
+        int offset=(signed char)CPU_PEEK_mPC;\
+        mPC++;\
+        mPC+=offset;\
+        /* mPC&=0xffff; */ \
+    }\
+    else\
+    {\
+        mPC++;\
+        /* mPC&=0xffff; */\
+    } \
 }
+
+#define xBCC() BRANCH(!mC)
+
+#define	xBCS() BRANCH(mC)
+
+#define	xBEQ() BRANCH(mZ)
 
 // This version of bit, not setting N and V status flags in immediate, seems to be correct.
 // The same behaviour is reported on the 65C02 used in old Apple computers, at least.
@@ -231,55 +252,15 @@
 //	mV=value&0x40;\
 //}
 
-#define	xBMI()\
-{\
-	if(mN)\
-	{\
-		int offset=(signed char)CPU_PEEK(mPC);\
-		mPC++;\
-		mPC+=offset;\
-		mPC&=0xffff;\
-	}\
-	else\
-	{\
-		mPC++;\
-		mPC&=0xffff;\
-	}\
-}
+#define	xBMI() BRANCH(mN)
 
-#define	xBNE()\
-{\
-	if(!mZ)\
-	{\
-		int offset=(signed char)CPU_PEEK(mPC);\
-		mPC++;\
-		mPC+=offset;\
-		mPC&=0xffff;\
-	}\
-	else\
-	{\
-		mPC++;\
-		mPC&=0xffff;\
-	}\
-}
+#define	xBNE() BRANCH(!mZ)
 
-#define	xBPL()\
-{\
-	if(!mN)\
-	{\
-		int offset=(signed char)CPU_PEEK(mPC);\
-		mPC++;\
-		mPC+=offset;\
-		mPC&=0xffff;\
-	}\
-	else\
-	{\
-		mPC++;\
-		mPC&=0xffff;\
-	}\
-}
+#define	xBPL() BRANCH(!mN)
 
-#define	xBRA()\
+#define xBRA() BRANCH(1)
+
+#define	xBRA_v1()\
 {\
 	int offset=(signed char)CPU_PEEK(mPC);\
 	mPC++;\
@@ -301,7 +282,8 @@
 //}
 #define	xBRK()\
 {\
-	mPC++;\
+    /* ULONG old_region= mPC_region; */ \
+    mPC++;\
     PUSH(mPC>>8);\
 	PUSH(mPC&0xff);\
 	PUSH(PS()|0x10);\
@@ -309,41 +291,15 @@
 	mD=FALSE;\
 	mI=TRUE;\
 \
-	mPC=CPU_PEEKW(IRQ_VECTOR);\
+    /* CPU_UPDATE_mPC( */ \
+	mPC = CPU_PEEKW_SYSTEM(IRQ_VECTOR);\
+	/* if (old_region != mPC_region) printf("Region changed in branch!\n"); */ \
 }
 // KW 4/11/98 B flag needed to be set IN the stack status word = 0x10.
 
-#define	xBVC()\
-{\
-	if(!mV)\
-	{\
-		int offset=(signed char)CPU_PEEK(mPC);\
-		mPC++;\
-		mPC+=offset;\
-		mPC&=0xffff;\
-	}\
-	else\
-	{\
-		mPC++;\
-		mPC&=0xffff;\
-	}\
-}
+#define	xBVC() BRANCH(!mV)
 
-#define	xBVS()\
-{\
-	if(mV)\
-	{\
-		int offset=(signed char)CPU_PEEK(mPC);\
-		mPC++;\
-		mPC+=offset;\
-		mPC&=0xffff;\
-	}\
-	else\
-	{\
-		mPC++;\
-		mPC&=0xffff;\
-	}\
-}
+#define	xBVS() BRANCH(mV)
 
 #define	xCLC()\
 {\
@@ -503,14 +459,14 @@
 
 #define	xJMP()\
 {\
-	mPC=mOperand;\
+	CPU_UPDATE_mPC( mOperand );\
 }
 
 #define	xJSR()\
 {\
-	PUSH((mPC-1)>>8);\
+    PUSH((mPC-1)>>8);\
 	PUSH((mPC-1)&0xff);\
-	mPC=mOperand;\
+	/* region can change */ CPU_UPDATE_mPC( mOperand );\
 }
 
 #define	xLDA()\
@@ -650,6 +606,7 @@
 	PULL(mPC);\
 	PULL(tmp);\
 	mPC|=tmp<<8;\
+	CPU_UPDATE_mPC_region; \
 }
 
 #define	xRTS()\
@@ -659,6 +616,7 @@
 	PULL(tmp);\
 	mPC|=tmp<<8;\
 	mPC++;\
+	CPU_UPDATE_mPC_region; \
 }
 
 //#define	xSBC()\
