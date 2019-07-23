@@ -343,10 +343,12 @@ NOINLINE void DoMenuHome(bool save)
 
     odroid_gamepad_state joystick;   
     odroid_input_gamepad_read(&joystick);
+#if 0
     if (!joystick.values[ODROID_INPUT_START] && !save)
     {
        save = odroid_ui_ask_v2(" Save current state?", color_selected, COLOR_RGB(1,2,5), 0)==0;
     }
+#endif
     odroid_display_show_hourglass();
 
     if (save) gpio_set_level(GPIO_NUM_2, 1);
