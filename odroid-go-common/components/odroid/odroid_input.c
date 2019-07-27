@@ -20,9 +20,6 @@ static odroid_gamepad_state previous_gamepad_state;
 static uint8_t debounce[ODROID_INPUT_MAX];
 static volatile bool input_gamepad_initialized = false;
 static SemaphoreHandle_t xSemaphore;
-#ifdef MY_KEYS
-static volatile uint16_t gamepad_state_masked = 0;
-#endif
 
 static esp_adc_cal_characteristics_t characteristics;
 static bool input_battery_initialized = false;
@@ -171,21 +168,6 @@ static void odroid_input_task(void *arg)
     	state.values[ODROID_INPUT_VOLUME] = !(gpio_get_level(ODROID_GAMEPAD_IO_VOLUME));
 #endif
 
-#ifdef MY_KEYS
-        uint16_t state_masked = 0;
-        if (state.values[ODROID_INPUT_UP]) state_masked |= ODROID_INPUT_UP_MASK;
-        if (state.values[ODROID_INPUT_RIGHT]) state_masked |= ODROID_INPUT_RIGHT_MASK;
-        if (state.values[ODROID_INPUT_DOWN]) state_masked |= ODROID_INPUT_DOWN_MASK;
-        if (state.values[ODROID_INPUT_LEFT]) state_masked |= ODROID_INPUT_LEFT_MASK;
-        if (state.values[ODROID_INPUT_SELECT]) state_masked |= ODROID_INPUT_SELECT_MASK;
-        if (state.values[ODROID_INPUT_START]) state_masked |= ODROID_INPUT_START_MASK;
-        if (state.values[ODROID_INPUT_A]) state_masked |= ODROID_INPUT_A_MASK;
-        if (state.values[ODROID_INPUT_B]) state_masked |= ODROID_INPUT_B_MASK;
-        if (state.values[ODROID_INPUT_MENU]) state_masked |= ODROID_INPUT_MENU_MASK;
-        if (state.values[ODROID_INPUT_VOLUME]) state_masked |= ODROID_INPUT_VOLUME_MASK;
-        gamepad_state_masked = state_masked;
-#endif 
- 
         // Debounce
         xSemaphoreTake(xSemaphore, portMAX_DELAY);
 
@@ -258,7 +240,7 @@ static void odroid_input_task(void *arg)
                 changed = false;
             }
         }
-        
+
         previous_gamepad_state = gamepad_state;
 
         xSemaphoreGive(xSemaphore);
@@ -326,12 +308,7 @@ void odroid_input_gamepad_terminate()
 
     input_task_is_running = false;
 }
-#ifdef MY_KEYS
-uint16_t odroid_input_gamepad_read_masked()
-{
-    return gamepad_state_masked;
-}
-#endif
+
 void odroid_input_gamepad_read(odroid_gamepad_state* out_state)
 {
     if (!input_gamepad_initialized) abort();

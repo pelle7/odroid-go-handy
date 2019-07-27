@@ -2,8 +2,6 @@
 
 #include <stdint.h>
 
-// #define MY_KEYS
-
 
 #define ODROID_GAMEPAD_IO_X ADC1_CHANNEL_6
 #define ODROID_GAMEPAD_IO_Y ADC1_CHANNEL_7
@@ -14,18 +12,6 @@
 #define ODROID_GAMEPAD_IO_MENU GPIO_NUM_13
 #define ODROID_GAMEPAD_IO_VOLUME GPIO_NUM_0
 
-#ifdef MY_KEYS
-#define ODROID_INPUT_UP_MASK      1
-#define ODROID_INPUT_RIGHT_MASK   2
-#define ODROID_INPUT_DOWN_MASK    4
-#define ODROID_INPUT_LEFT_MASK    8
-#define ODROID_INPUT_SELECT_MASK  16
-#define ODROID_INPUT_START_MASK   32
-#define ODROID_INPUT_A_MASK       64
-#define ODROID_INPUT_B_MASK       128
-#define ODROID_INPUT_MENU_MASK    256
-#define ODROID_INPUT_VOLUME_MASK  512
-#endif
 
 enum
 {
@@ -57,9 +43,6 @@ typedef struct
 void odroid_input_gamepad_init();
 void odroid_input_gamepad_terminate();
 void odroid_input_gamepad_read(odroid_gamepad_state* out_state);
-#ifdef MY_KEYS
-uint16_t odroid_input_gamepad_read_masked();
-#endif
 odroid_gamepad_state odroid_input_read_raw();
 
 void odroid_input_battery_level_init();

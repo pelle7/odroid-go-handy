@@ -1,3 +1,23 @@
+#ifndef ODROID_DISPLAY_EMU_IMPL
+void ili9341_write_frame_lynx(uint16_t* buffer, uint16_t* myPalette, uint8_t scale);
+void ili9341_write_frame_lynx_v2(uint8_t* buffer, uint32_t* myPalette, uint8_t scale, uint8_t filtering);
+void ili9341_write_frame_lynx_v2_mode0(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_mode1(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_mode2(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_mode3(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_original(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_original_rotate_R(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_original_rotate_L(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_mode0_rotate_R(uint8_t* buffer, uint32_t* myPalette);
+void ili9341_write_frame_lynx_v2_mode0_rotate_L(uint8_t* buffer, uint32_t* myPalette);
+#else
+
+// Lynx
+#define LYNX_GAME_WIDTH (160)
+#define LYNX_GAME_HEIGHT (102)
+
+
+
 void ili9341_write_frame_lynx(uint16_t* buffer, uint16_t* myPalette, uint8_t scale)
 {
     short x, y;
@@ -557,3 +577,4 @@ void ili9341_write_frame_lynx_v2(uint8_t* buffer, uint32_t* myPalette, uint8_t s
 
     odroid_display_unlock();
 }
+#endif

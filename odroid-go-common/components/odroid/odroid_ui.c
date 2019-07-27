@@ -573,11 +573,8 @@ int exec_menu(bool *restart_menu, odroid_ui_func_window_init_def func_window_ini
 }
 
 void odroid_ui_debug_enter_loop() {
-	odroid_settings_Volume_set(ODROID_VOLUME_LEVEL1);
 	printf("odroid_ui_debug_enter_loop: go\n");
 	startTime = xthal_get_ccount();
-	//font8x8_basic2 = (char*)heap_caps_malloc(128*8, MALLOC_CAP_8BIT|MALLOC_CAP_INTERNAL); //MALLOC_CAP_SPIRAM);
-	//memcpy(font8x8_basic2, font8x8_basic, 128*8);
 	prepare();
 	config_speedup = false;
 }
