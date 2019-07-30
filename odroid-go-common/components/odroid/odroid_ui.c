@@ -11,6 +11,7 @@
 #include "odroid_display.h"
 #include "odroid_input.h"
 #include "odroid_audio.h"
+#include "odroid_debug.h"
 #include <stdio.h>
 #include <string.h>
 //#include <stdint.h>
@@ -577,6 +578,7 @@ void odroid_ui_debug_enter_loop() {
 	startTime = xthal_get_ccount();
 	prepare();
 	config_speedup = false;
+	ODROID_DEBUG_PERF_INIT()
 }
 
 bool MyQuickSaveState() {

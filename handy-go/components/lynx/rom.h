@@ -79,6 +79,9 @@ class CRom : public CLynxBase
    public:
       bool	mWriteEnable;
       bool	mValid;
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+      systemvars    *gSystemVars;
+#endif
    private:
       UBYTE	*mRomData;// [ROM_SIZE];
       char	*mFileName;

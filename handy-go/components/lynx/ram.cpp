@@ -98,11 +98,7 @@ CRam::CRam(UBYTE *filememory,ULONG filesize)
    }
    // Reset will cause the loadup
 
-   Reset();
-
-#ifdef MY_DEBUG_OUT
-   printf("%-20s: %ps\n", "ram", &mFileSize);
-#endif
+   //Reset(); // Moved to system.cpp
 }
 
 CRam::~CRam()
@@ -139,7 +135,7 @@ void CRam::Reset(void)
       memset(mRamData, 0x00, header.load_address);
       memcpy(mRamData+header.load_address, mFileData, data_size);
       memset(mRamData+header.load_address+data_size, 0x00, RAM_SIZE-header.load_address-data_size);
-      gCPUBootAddress=header.load_address;
+      SYSTEM_VAR(gCPUBootAddress)=header.load_address;
    } else {
       memset(mRamData, DEFAULT_RAM_CONTENTS, RAM_SIZE);
    }

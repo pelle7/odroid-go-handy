@@ -1,4 +1,11 @@
+#ifdef SUSIE_INLINE_LineGetBits_V2
+    {
+#else
    ULONG retval;
+   #define SUSIE_INLINE_LineGetBits_RC retval 
+#endif
+
+ODROID_DEBUG_PERF_START()
 
    // Sanity, not really needed
    // if(bits>32) return 0;
@@ -25,11 +32,15 @@
    }
 
    // Extract the return value
-   retval=mLineShiftReg>>(mLineShiftRegCount-bits);
-   retval&=(1<<bits)-1;
+   SUSIE_INLINE_LineGetBits_RC=mLineShiftReg>>(mLineShiftRegCount-bits);
+   SUSIE_INLINE_LineGetBits_RC&=(1<<bits)-1;
 
    // Update internal vars;
    mLineShiftRegCount-=bits;
    mLinePacketBitsLeft-=bits;
-
+ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_SUSIE_LINEGETBITS)
+#ifdef SUSIE_INLINE_LineGetBits_V2
+    }
+#else
    return retval;
+#endif

@@ -69,6 +69,7 @@
 #endif
 
 class CSystem;
+class CSusie;
 
 extern bool skipNextFrame;
 
@@ -187,9 +188,14 @@ enum
 //#define MIKIE_INLINE_Update // slower
 #define MIKIE_INLINE_UpdateSound
 #define MIKIE_INLINE_UpdateCalcSound
-// #define MIKIE_INLINE_DisplayRenderLine // negativ performance
+#define MIKIE_INLINE_DisplayRenderLine // neutral performance, a bit faster +++++
 // #define MIKIE_INLINE_DisplayEndOfFrame // neutral
-// #define MIKIE_INLINE_GetLfsrNext // negativ performance
+#define MIKIE_INLINE_GetLfsrNext //
+//#define MIKIE_INLINE_Poke // doesn't work 'yet'
+
+#ifdef MIKIE_INLINE_Poke
+#include "lynxdef.h"
+#endif
 
 #if MY_AUDIO_MODE==2
 #define AUDIO_CALC(x, audio_out, audio_atten) \
@@ -220,7 +226,15 @@ class CMikie : public CLynxBase
       void	Reset(void);
 
       UBYTE	Peek(ULONG addr);
-      void	Poke(ULONG addr,UBYTE data);
+#ifdef MIKIE_INLINE_Poke
+    inline void Poke(ULONG addr,UBYTE data)
+    {
+        #include "mikie_Poke.h"
+    }
+#else
+    void    Poke(ULONG addr,UBYTE data);
+#endif
+      
       //ULONG	ReadCycle(void) {return 5;};
       //ULONG	WriteCycle(void) {return 5;};
       ULONG	ObjectSize(void) {return MIKIE_SIZE;};
@@ -258,8 +272,8 @@ class CMikie : public CLynxBase
       ULONG	DisplayEndOfFrame(void);
 #endif
 
-      inline void SetCPUSleep(void) {gSystemCPUSleep=TRUE;};
-      inline void ClearCPUSleep(void) {gSystemCPUSleep=FALSE;gSystemCPUSleep_Saved=FALSE;};
+      inline void SetCPUSleep(void) {SYSTEM_VAR(gSystemCPUSleep)=TRUE;};
+      inline void ClearCPUSleep(void) {SYSTEM_VAR(gSystemCPUSleep)=FALSE;SYSTEM_VAR(gSystemCPUSleep_Saved)=FALSE;};
 
 #ifdef MIKIE_INLINE_Update
     inline void Update(void) {
@@ -288,8 +302,28 @@ class CMikie : public CLynxBase
       inline bool SwitchAudInDir(void){ return(mIODIR&0x10);};
       inline bool SwitchAudInValue(void){ return (mIODAT&0x10);};
 
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+      systemvars    *gSystemVars;
+#endif
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU
+     ULONG gAudioBufferPointer;
+#endif
+     UBYTE   *gAudioBuffer;
+     CSusie *mSusie;
    private:
+void MY_SLOW Error();
+void MY_SLOW Poke_TIM0CTLA(UBYTE data);
+void MY_SLOW Poke_TIM1CTLA(UBYTE data);
+void MY_SLOW Poke_TIM2CTLA(UBYTE data);
+void MY_SLOW Poke_TIM3CTLA(UBYTE data);
+void MY_SLOW Poke_TIM4CTLA(UBYTE data);
+void MY_SLOW Poke_TIM5CTLA(UBYTE data);
+void MY_SLOW Poke_TIM6CTLA(UBYTE data);
+void MY_SLOW Poke_TIM7CTLA(UBYTE data);      
+      
+
       CSystem		&mSystem;
+
 
       // Hardware storage
 

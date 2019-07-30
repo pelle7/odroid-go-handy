@@ -19,7 +19,7 @@
 
          //    fprintf(stderr, "cpu update\n");
 
-         if(gSystemIRQ && !mI)
+         if(SYSTEM_VAR(gSystemIRQ) && !mI)
          {
             TRACE_CPU1("Update() IRQ taken at PC=%04x",mPC);
             // IRQ signal clearance is handled by CMikie::Update() as this
@@ -38,20 +38,20 @@
             CPU_UPDATE_mPC( CPU_PEEKW_SYSTEM(IRQ_VECTOR) );
 
             // Save the sleep state as an irq has possibly woken the processor
-            gSystemCPUSleep_Saved=gSystemCPUSleep;
-            gSystemCPUSleep=FALSE;
+            SYSTEM_VAR(gSystemCPUSleep_Saved)=SYSTEM_VAR(gSystemCPUSleep);
+            SYSTEM_VAR(gSystemCPUSleep)=FALSE;
 
             // Log the irq entry time
-            gIRQEntryCycle=gSystemCycleCount;
+            SYSTEM_VAR(gIRQEntryCycle)=SYSTEM_VAR(gSystemCycleCount);
 
             // Clear the interrupt status line
-            gSystemIRQ=FALSE;
+            SYSTEM_VAR(gSystemIRQ)=FALSE;
          }
 
          //
          // If the CPU is asleep then skip to the next timer event
          //
-         if(gSystemCPUSleep) return;
+         if(SYSTEM_VAR(gSystemCPUSleep)) return;
 
          // Fetch opcode
 /*
@@ -88,12 +88,6 @@ else
          #include "c65c02_update2_switch.h"
 }         
          
-#ifdef MY_DEBUG_OUT         
-         cpu_update++;
-         cpu_calls[mOpcode]++;
-#endif
-
-
 #ifdef _LYNXDBG
 
          // Trigger breakpoint if required

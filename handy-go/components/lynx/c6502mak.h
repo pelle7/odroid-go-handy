@@ -697,7 +697,7 @@
 
 #define	xSTP()\
 {\
-	gSystemCPUSleep=TRUE;\
+	SYSTEM_VAR(gSystemCPUSleep)=TRUE;\
 }
 
 #define	xSTX()\
@@ -790,6 +790,6 @@
 
 #define	xWAI()\
 {\
-	gSystemCPUSleep=TRUE;\
+	SYSTEM_VAR(gSystemCPUSleep)=TRUE;\
 }
 

@@ -7,16 +7,18 @@
 #define MY_CPU_V2
 #define MY_CART_INLINE
 
-//#define MY_DEBUG_OUT
-
-#ifdef MY_DEBUG_OUT
-extern int my_debug_count;
-extern int mikie_susie_paint;
-extern int mikie_poke;
-extern int mikie_peek;
-extern int cpu_update;
-extern int cpu_calls[];
+//#define MY_SUSIE_VARS // very bad
+#define MY_GLOBAL_SYSTEM_VARS_CPU
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU
+#define MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
 #endif
+
+#include "../odroid/odroid_debug.h"
+
+// DRAM_ATTR
+#define MY_SLOW NOINLINE_ATTR 
+
+//#define ODROID_DEBUG_PERF_CPU_ALL_INSTR
 
 //#define MY_HANDY_CPU
 
@@ -45,6 +47,7 @@ extern int cpu_calls[];
 #define MY_MEM_MODE
 // #define MY_MEM_MODE_V2 // a little bit slower as MY_MEM_MODE?
 
+//#define MY_AUDIO_MODE_V1
 #define MY_AUDIO_MODE 2
 
 #define MY_VIDEO_MODE_V1

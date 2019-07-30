@@ -87,7 +87,9 @@ class CRam : public CLynxBase
       UBYTE*	GetRamPointer(void) { return mRamData; };
 
       // Data members
-
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+      systemvars    *gSystemVars;
+#endif
    private:
 #ifdef MY_RAM_IN_32BIT
       //ULONG	*mRamData;//[RAM_SIZE];

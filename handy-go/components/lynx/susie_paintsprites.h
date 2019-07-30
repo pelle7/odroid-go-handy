@@ -1,3 +1,5 @@
+   ODROID_DEBUG_PERF_START()
+   
    ULONG sprcount=0;
    ULONG data=0;
    bool everonscreen=0;
@@ -19,8 +21,58 @@
       TRACE_SUSIE0("PaintSprites() Returned !mSUZYBUSEN || !mSPRGO");
       return 0;
    }
-
+   //ULONG       mPenIndex[16];
    cycles_used=0;
+   
+   #ifdef SUSIE_INLINE_LineGetBits_V2
+   UUWORD        mTMPADR;
+   UUWORD        mSCBADR;
+   UUWORD mHSIZACUM;
+   UUWORD mSPRHSIZ = mSPRHSIZ_;
+   
+   // Local UUWORD: Equal or slower
+   #define mTILTACUM mTILTACUM_
+   #define mSPRDLINE mSPRDLINE_
+   #define mSPRDOFF mSPRDOFF_
+   #define mHPOSSTRT mHPOSSTRT_
+   #define mSPRVSIZ mSPRVSIZ_
+   #define mSTRETCH mSTRETCH_
+   #define mTILT mTILT_
+   
+#ifndef mTILTACUM
+   UUWORD mTILTACUM;
+#endif
+#ifndef mSPRDLINE
+   UUWORD mSPRDLINE;
+#endif
+#ifndef mSPRDOFF
+   UUWORD mSPRDOFF;
+#endif
+#ifndef mHPOSSTRT
+   UUWORD mHPOSSTRT;
+#endif
+#ifndef mSPRVSIZ
+   UUWORD mSPRVSIZ = mSPRVSIZ_;
+#endif
+#ifndef mSTRETCH
+   UUWORD mSTRETCH = mSTRETCH_;
+#endif
+#ifndef mTILT
+   UUWORD mTILT = mTILT_;
+#endif
+   #else
+   #define mTMPADR mTMPADR_
+   #define mSCBADR mSCBADR_
+   #define mTILTACUM mTILTACUM_
+   #define mSPRDLINE mSPRDLINE_
+   #define mSPRDOFF mSPRDOFF_
+   #define mHPOSSTRT mHPOSSTRT_
+   #define mSPRHSIZ mSPRHSIZ_
+   #define mSPRVSIZ mSPRVSIZ_
+   #define mSTRETCH mSTRETCH_
+   #define mTILT mTILT_
+   #endif
+   ULONG mSPRSYS_VStretch_Local = mSPRSYS_VStretch;
 
    do
    {
@@ -43,14 +95,18 @@
       {
          mSPRSYS_Status=1;
       }
-
+      
       mTMPADR.Word=mSCBNEXT.Word;   // Copy SCB pointer
       mSCBADR.Word=mSCBNEXT.Word;   // Copy SCB pointer
       TRACE_SUSIE1("PaintSprites() SCBADDR $%04x",mSCBADR.Word);
 
       data=RAM_PEEK(mTMPADR.Word);          // Fetch control 0
       TRACE_SUSIE1("PaintSprites() SPRCTL0 $%02x",data);
-      mSPRCTL0_Type=data&0x0007;
+#ifdef MY_SUSIE_PIXEL_HLOOP
+      ULONG mSPRCTL0_Type=data&0x0007;
+#else
+     mSPRCTL0_Type=data&0x0007;
+#endif
       mSPRCTL0_Vflip=data&0x0010;
       mSPRCTL0_Hflip=data&0x0020;
       mSPRCTL0_PixelBits=((data&0x00c0)>>6)+1;
@@ -256,6 +312,8 @@
          //
 
          // Loop for 4 quadrants
+         
+         ODROID_DEBUG_PERF_START2(debug_susie_paint_loop4)
 
          for(int loop=0;loop<4;loop++)
          {
@@ -352,9 +410,10 @@
 #ifdef MY_NO_STATIC
              ULONG pixel_height=0;
              ULONG pixel_width=0;
-             ULONG pixel=0;
+             //ULONG pixel=0;
              int hoff=0,voff=0;
-             int hloop=0,vloop=0;
+             //int hloop=0;
+             int vloop=0;
              bool onscreen=0;
 #else
             static int pixel_height=0;
@@ -388,13 +447,29 @@
 
                for(;;)
                {
+#ifdef SUSIE_INLINE_LineGetBits_V2
+ULONG       mLineType;
+ULONG       mLineShiftRegCount;
+ULONG       mLineShiftReg;
+ULONG       mLineRepeatCount;
+ULONG       mLinePixel;
+ULONG       mLinePacketBitsLeft;
+#endif
                   // Vertical scaling is done here
                   mVSIZACUM.Word+=mSPRVSIZ.Word;
                   pixel_height=mVSIZACUM.Byte.High;
                   mVSIZACUM.Byte.High=0;
 
                   // Update the next data line pointer and initialise our line
+#ifdef SUSIE_INLINE_LineInit
+                 {
+                 #define VOFF_LINEINIT 0
+                 #include "susie_LineInit.h"
+                 mSPRDOFF.Word=(UWORD)offset;
+                 }
+#else
                   mSPRDOFF.Word=(UWORD)LineInit(0);
+#endif
 
                   // If 1 == next quad, ==0 end of sprite, anyways its END OF LINE
                   if(mSPRDOFF.Word==1)      // End of quad
@@ -408,7 +483,7 @@
                      loop=4;        // Halt the quad loop
                      break;
                   }
-
+                  ODROID_DEBUG_PERF_START2(debug_susie_paint_vloop)
                   // Draw one horizontal line of the sprite
                   for(vloop=0;vloop<pixel_height;vloop++)
                   {
@@ -440,9 +515,18 @@
 #endif
 
                         // Initialise our line
+#ifdef SUSIE_INLINE_LineInit
+                 {
+                 #undef VOFF_LINEINIT
+                 #define VOFF_LINEINIT voff
+                 #include "susie_LineInit.h"
+                 }
+#else
                         LineInit(voff);
+#endif
                         onscreen=FALSE;
 
+ODROID_DEBUG_PERF_START2(debug_susie_paint_hloop)
 #ifdef SUSIE_SIGN_MODE
 if (hsign==0)
 {
@@ -497,30 +581,14 @@ else
                     }
 }
 #else
-                        // Now render an individual destination line
-                        while((pixel=LineGetPixel())!=LINE_END)
-                        {
-                           // This is allowed to update every pixel
-                           mHSIZACUM.Word+=mSPRHSIZ.Word;
-                           pixel_width=mHSIZACUM.Byte.High;
-                           mHSIZACUM.Byte.High=0;
-
-                           for(hloop=0;hloop<pixel_width;hloop++)
-                           {
-                              // Draw if onscreen but break loop on transition to offscreen
-                              if(hoff>=0 && hoff<SCREEN_WIDTH)
-                              {
-                                 ProcessPixel(hoff,pixel);
-                                 onscreen=everonscreen=TRUE;
-                              }
-                              else
-                              {
-                                 if(onscreen) break;
-                              }
-                              hoff+=hsign;
-                           }
-                        }
+#ifdef MY_SUSIE_PIXEL_HLOOP
+#include "susie_paintsprites_pixelloop_v2.h"
+#else
+#include "susie_paintsprites_pixelloop_v1.h"
 #endif
+
+#endif
+ODROID_DEBUG_PERF_INCR2(debug_susie_paint_hloop, ODROID_DEBUG_PERF_SUSIE_PAINTSPRITES_HLOOP)
                      }
                      voff+=vsign;
 
@@ -536,9 +604,10 @@ else
                         mTILTACUM.Word+=mTILT.Word;
                      }
                   }
+                  ODROID_DEBUG_PERF_INCR2(debug_susie_paint_vloop, ODROID_DEBUG_PERF_SUSIE_PAINTSPRITES_VLOOP)
                   // According to the docs this increments per dest line
                   // but only gets set when the source line is read
-                  if(mSPRSYS_VStretch) mSPRVSIZ.Word+=mSTRETCH.Word*pixel_height;
+                  if(mSPRSYS_VStretch_Local) mSPRVSIZ.Word+=mSTRETCH.Word*pixel_height;
 
                   // Update the line start for our next run thru the loop
                   mSPRDLINE.Word+=mSPRDOFF.Word;
@@ -549,9 +618,25 @@ else
                // Skip thru data to next quad
                for(;;)
                {
+#ifdef SUSIE_INLINE_LineGetBits_V2
+ULONG       mLineType;
+ULONG       mLineShiftRegCount;
+ULONG       mLineShiftReg;
+ULONG       mLineRepeatCount;
+ULONG       mLinePixel;
+ULONG       mLinePacketBitsLeft;
+#endif
                   // Read the start of line offset
-
+#ifdef SUSIE_INLINE_LineInit
+                 {
+                 #undef VOFF_LINEINIT
+                 #define VOFF_LINEINIT 0
+                 #include "susie_LineInit.h"
+                 mSPRDOFF.Word=(UWORD)offset;
+                 }
+#else
                   mSPRDOFF.Word=(UWORD)LineInit(0);
+#endif
 
                   // We dont want to process data so mSPRDLINE is useless to us
                   mSPRDLINE.Word+=mSPRDOFF.Word;
@@ -572,7 +657,7 @@ else
             quadrant++;
             quadrant&=0x03;
          }
-
+         ODROID_DEBUG_PERF_INCR2(debug_susie_paint_loop4, ODROID_DEBUG_PERF_SUSIE_PAINTSPRITES_LOOP4)
          // Write the collision depositary if required
 
          if(!mSPRCOLL_Collide && !mSPRSYS_NoCollide)
@@ -635,7 +720,7 @@ else
       if(sprcount>4096)
       {
          // Stop the system, otherwise we may just come straight back in.....
-         gSystemHalt=TRUE;
+         SYSTEM_VAR(gSystemHalt)=TRUE;
          // Display warning message
          gError->Warning("CSusie:PaintSprites(): Single draw sprite limit exceeded (>4096). The SCB is most likely looped back on itself. Reset/Exit is recommended");
          // Signal error to the caller
@@ -643,9 +728,38 @@ else
       }
    }
    while(1);
+#ifdef SUSIE_INLINE_LineGetBits_V2
+ mTMPADR_ = mTMPADR;
+ mSCBADR_ = mSCBADR;
+ mSPRHSIZ_ = mSPRHSIZ;
+ 
+#ifndef mTILTACUM
+ mTILTACUM_ = mTILTACUM;
+#endif
+#ifndef mSPRDLINE
+ mSPRDLINE_ = mSPRDLINE;
+#endif 
+#ifndef mSPRDOFF
+ mSPRDOFF_ = mSPRDOFF;
+#endif 
+#ifndef mHPOSSTRT
+ mHPOSSTRT_ = mHPOSSTRT;
+#endif 
+ 
+#ifndef mSPRVSIZ
+  mSPRVSIZ_ = mSPRVSIZ;
+#endif
+#ifndef mSTRETCH
+  mSTRETCH_ = mSTRETCH;
+#endif
+#ifndef mTILT
+  mTILT_ = mTILT;
+#endif
+
+#endif
 
    // Fudge factor to fix many flickering issues, also the keypress
    // problem with Hard Drivin and the strange pause in Dirty Larry.
    //   cycles_used>>=2;
-
+   ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_SUSIE_PAINTSPRITES)
    return cycles_used;

@@ -109,7 +109,11 @@ class CCart : public CLynxBase
    // Function members
 
    public:
-      CCart(UBYTE *gamedata,ULONG gamesize);
+ #ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+    CCart(UBYTE *gamedata,ULONG gamesize, systemvars *gSystemVars);
+ #else
+    CCart(UBYTE *gamedata,ULONG gamesize);
+ #endif
       ~CCart();
 
    public:
@@ -291,7 +295,9 @@ inline UBYTE Peek(ULONG addr)
       ULONG	mMaskBank0;
       ULONG	mMaskBank1;
       UBYTE     mEEPROMType;
-
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+      systemvars    *gSystemVars;
+#endif
    private:
       EMMODE	mBank;
 

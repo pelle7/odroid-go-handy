@@ -85,10 +85,28 @@ class CSystem;
 #define BUTTON_DOWN		0x0080
 #define BUTTON_PAUSE	0x0100
 
+#define line_error 0
+#define line_abs_literal 1
+#define line_literal 2
+#define line_packed 3
+//enum {line_error=0,line_abs_literal,line_literal,line_packed};
 
-enum {line_error=0,line_abs_literal,line_literal,line_packed};
-enum {math_finished=0,math_divide,math_multiply,math_init_divide,math_init_multiply};
+#define math_finished 0
+#define math_divide 1
+#define math_multiply 2
+#define math_init_divide 3
+#define math_init_multiply 4
+//enum {math_finished=0,math_divide,math_multiply,math_init_divide,math_init_multiply};
 
+#define sprite_background_shadow 0
+#define sprite_background_noncollide 1
+#define sprite_boundary_shadow 2
+#define sprite_boundary 3
+#define sprite_normal 4
+#define sprite_noncollide 5
+#define sprite_xor_shadow 6
+#define sprite_shadow 7
+/*
 enum {sprite_background_shadow=0,
    sprite_background_noncollide,
    sprite_boundary_shadow,
@@ -97,238 +115,13 @@ enum {sprite_background_shadow=0,
    sprite_noncollide,
    sprite_xor_shadow,
    sprite_shadow};
+*/
+   
+#ifndef MY_SUSIE_VARS
+      #include "susie_defs.h"
+#endif
 
-// Define register typdefs
-
-typedef struct 
-{
-   union
-   {
-      struct
-      {
-#ifdef MSB_FIRST
-         UBYTE	High;
-         UBYTE	Low;
-#else
-         UBYTE	Low;
-         UBYTE	High;
-#endif
-      }Byte;
-      UWORD	Word;
-   };
-}UUWORD;
-
-
-typedef struct
-{
-   union
-   {
-      struct
-      {
-#ifdef MSB_FIRST
-         UBYTE	Fc1:1;
-         UBYTE	Fc2:1;
-         UBYTE	Fc3:1;
-         UBYTE	reserved:1;
-         UBYTE	Ac1:1;
-         UBYTE	Ac2:1;
-         UBYTE	Ac3:1;
-         UBYTE	Ac4:1;
-#else
-         UBYTE	Ac4:1;
-         UBYTE	Ac3:1;
-         UBYTE	Ac2:1;
-         UBYTE	Ac1:1;
-         UBYTE	reserved:1;
-         UBYTE	Fc3:1;
-         UBYTE	Fc2:1;
-         UBYTE	Fc1:1;
-#endif
-      }Bits;
-      UBYTE	Byte;
-   };
-}TSPRINIT;
-
-typedef struct
-{
-   union
-   {
-      struct
-      {
-#ifdef MSB_FIRST
-         UBYTE	Up:1;
-         UBYTE	Down:1;
-         UBYTE	Left:1;
-         UBYTE	Right:1;
-         UBYTE	Option1:1;
-         UBYTE	Option2:1;
-         UBYTE	Inside:1;
-         UBYTE	Outside:1;
-#else
-         UBYTE	Outside:1;
-         UBYTE	Inside:1;
-         UBYTE	Option2:1;
-         UBYTE	Option1:1;
-         UBYTE	Right:1;
-         UBYTE	Left:1;
-         UBYTE	Down:1;
-         UBYTE	Up:1;
-#endif
-      }Bits;
-      UBYTE	Byte;
-   };
-}TJOYSTICK;
-
-typedef struct
-{
-   union
-   {
-      struct
-      {
-#ifdef MSB_FIRST
-         UBYTE	spare:5;
-         UBYTE	Cart1IO:1;
-         UBYTE	Cart0IO:1;
-         UBYTE	Pause:1;
-#else
-         UBYTE	Pause:1;
-         UBYTE	Cart0IO:1;
-         UBYTE	Cart1IO:1;
-         UBYTE	spare:5;
-#endif
-      }Bits;
-      UBYTE	Byte;
-   };
-}TSWITCHES;
-
-typedef struct
-{
-   union
-   {
-      struct
-      {
-#ifdef MSB_FIRST
-         UBYTE	A;
-         UBYTE	B;
-         UBYTE	C;
-         UBYTE	D;
-#else
-         UBYTE	D;
-         UBYTE	C;
-         UBYTE	B;
-         UBYTE	A;
-#endif
-      }Bytes;
-      struct
-      {
-#ifdef MSB_FIRST
-         UWORD	AB;
-         UWORD	CD;
-#else
-         UWORD	CD;
-         UWORD	AB;
-#endif
-      }Words;
-      ULONG	Long;
-   };
-}TMATHABCD;
-
-typedef struct
-{
-   union
-   {
-      struct
-      {
-#ifdef MSB_FIRST
-         UBYTE	E;
-         UBYTE	F;
-         UBYTE	G;
-         UBYTE	H;
-#else
-         UBYTE	H;
-         UBYTE	G;
-         UBYTE	F;
-         UBYTE	E;
-#endif
-      }Bytes;
-      struct
-      {
-#ifdef MSB_FIRST
-         UWORD	EF;
-         UWORD	GH;
-#else
-         UWORD	GH;
-         UWORD	EF;
-#endif
-      }Words;
-      ULONG	Long;
-   };
-}TMATHEFGH;
-
-typedef struct
-{
-   union
-   {
-      struct
-      {
-#ifdef MSB_FIRST
-         UBYTE	J;
-         UBYTE	K;
-         UBYTE	L;
-         UBYTE	M;
-#else
-         UBYTE	M;
-         UBYTE	L;
-         UBYTE	K;
-         UBYTE	J;
-#endif
-      }Bytes;
-      struct
-      {
-#ifdef MSB_FIRST
-         UWORD	JK;
-         UWORD	LM;
-#else
-         UWORD	LM;
-         UWORD	JK;
-#endif
-      }Words;
-      ULONG	Long;
-   };
-}TMATHJKLM;
-
-typedef struct
-{
-   union
-   {
-      struct
-      {
-#ifdef MSB_FIRST
-         UBYTE	xx2;
-         UBYTE	xx1;
-         UBYTE	N;
-         UBYTE	P;
-#else
-         UBYTE	P;
-         UBYTE	N;
-         UBYTE	xx1;
-         UBYTE	xx2;
-#endif
-      }Bytes;
-      struct
-      {
-#ifdef MSB_FIRST
-         UWORD	xx1;
-         UWORD	NP;
-#else
-         UWORD	NP;
-         UWORD	xx1;
-#endif
-      }Words;
-      ULONG	Long;
-   };
-}TMATHNP;
-
+#define MY_SUSIE_PIXEL_HLOOP
 //#define SUSIE_SIGN_MODE // buggy
 #define SUSIE_INLINE_PaintSprites
 //#define SUSIE_INLINE_PROCESSPIXEL // negativ performance
@@ -337,9 +130,11 @@ typedef struct
 #define SUSIE_INLINE_READPIXEL
 #define SUSIE_INLINE_READCOLLISION
 #define SUSIE_INLINE_WRITECOLLISION
+
 #define SUSIE_INLINE_LineInit
 #define SUSIE_INLINE_LineGetPixel
 #define SUSIE_INLINE_LineGetBits
+#define SUSIE_INLINE_LineGetBits_V2
 
 #define SUSIE_INLINE_DoMathDivide
 #define SUSIE_INLINE_DoMathMultiply
@@ -347,7 +142,6 @@ typedef struct
 #define RAM_PEEK(m)             (mRamPointer[(m)])
 #define RAM_PEEKW(m)            (mRamPointer[(m)]+(mRamPointer[(m)+1]<<8))
 #define RAM_POKE(m1,m2)         {mRamPointer[(m1)]=(m2);}
-
 
 #define MY_GET_BITS(retval_bits, bits) \
      /* ULONG retval_bits; */ \
@@ -369,6 +163,7 @@ typedef struct
    mLinePacketBitsLeft-=bits; \
    }
 
+#include "system_vars.h"
 
 class CSusie : public CLynxBase
 {
@@ -414,19 +209,21 @@ class CSusie : public CLynxBase
 #endif
 
 #ifdef SUSIE_INLINE_LineInit
-      inline ULONG LineInit(ULONG voff) {
-      #include "susie_LineInit.h"
-      }
 #else
       ULONG	LineInit(ULONG voff);
 #endif
+
+#ifndef MY_SUSIE_PIXEL_HLOOP
 #ifdef SUSIE_INLINE_LineGetPixel
-      inline ULONG LineGetPixel(void) {
+      inline ULONG LineGetPixel() {
       #include "susie_LineGetPixel.h"
       }
 #else
       ULONG	LineGetPixel(void);
 #endif
+#endif
+
+#ifndef SUSIE_INLINE_LineGetBits_V2
 #ifdef SUSIE_INLINE_LineGetBits
       inline ULONG LineGetBits(ULONG bits) {
       #include "susie_LineGetBits.h"
@@ -434,13 +231,16 @@ class CSusie : public CLynxBase
 #else
       ULONG	LineGetBits(ULONG bits);
 #endif
+#endif
 
 #ifdef SUSIE_INLINE_PROCESSPIXEL
       inline void	ProcessPixel(ULONG hoff,ULONG pixel) {
       #include "susie_processpixel.h"
       }
 #else
+#ifndef MY_SUSIE_PIXEL_HLOOP
       void    ProcessPixel(ULONG hoff,ULONG pixel);
+#endif
 #endif
 #ifdef SUSIE_INLINE_WRITEPIXEL
     inline void  WritePixel(ULONG hoff,ULONG pixel) {
@@ -473,106 +273,17 @@ class CSusie : public CLynxBase
 #else
       ULONG	ReadCollision(ULONG hoff);
 #endif
-
+   public:
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+      systemvars    *gSystemVars;
+#endif
    private:
       CSystem&	mSystem;
-      ULONG cycles_used;
-
-      UUWORD		mTMPADR;		// ENG
-      UUWORD		mTILTACUM;		// ENG
-      UUWORD		mHOFF;			// CPU
-      UUWORD		mVOFF;			// CPU
-      UUWORD		mVIDBAS;		// CPU
-      UUWORD		mCOLLBAS;		// CPU
-      UUWORD		mVIDADR;		// ENG
-      UUWORD		mCOLLADR;		// ENG
-      UUWORD		mSCBNEXT;		// SCB
-      UUWORD		mSPRDLINE;		// SCB
-      UUWORD		mHPOSSTRT;		// SCB
-      UUWORD		mVPOSSTRT;		// SCB
-      UUWORD		mSPRHSIZ;		// SCB
-      UUWORD		mSPRVSIZ;		// SCB
-      UUWORD		mSTRETCH;		// ENG
-      UUWORD		mTILT;			// ENG
-      UUWORD		mSPRDOFF;		// ENG
-      UUWORD		mSPRVPOS;		// ENG
-      UUWORD		mCOLLOFF;		// CPU
-      UUWORD		mVSIZACUM;		// ENG
-      UUWORD		mHSIZACUM;		//    K.s creation
-      UUWORD		mHSIZOFF;		// CPU
-      UUWORD		mVSIZOFF;		// CPU
-      UUWORD		mSCBADR;		// ENG
-      UUWORD		mPROCADR;		// ENG
-
-      TMATHABCD	mMATHABCD;		// ENG
-      TMATHEFGH	mMATHEFGH;		// ENG
-      TMATHJKLM	mMATHJKLM;		// ENG
-      TMATHNP		mMATHNP;		// ENG
-      int			mMATHAB_sign;
-      int			mMATHCD_sign;
-      int			mMATHEFGH_sign;
-
-      int			mSPRCTL0_Type;			// SCB
-      int			mSPRCTL0_Vflip;
-      int			mSPRCTL0_Hflip;
-      int			mSPRCTL0_PixelBits;
-
-      int			mSPRCTL1_StartLeft;		// SCB
-      int			mSPRCTL1_StartUp;
-      int			mSPRCTL1_SkipSprite;
-      int			mSPRCTL1_ReloadPalette;
-      int			mSPRCTL1_ReloadDepth;
-      int			mSPRCTL1_Sizing;
-      int			mSPRCTL1_Literal;
-
-      int			mSPRCOLL_Number;		//CPU
-      int			mSPRCOLL_Collide;
-
-      int			mSPRSYS_StopOnCurrent;	//CPU
-      int			mSPRSYS_LeftHand;
-      int			mSPRSYS_VStretch;
-      int			mSPRSYS_NoCollide;
-      int			mSPRSYS_Accumulate;
-      int			mSPRSYS_SignedMath;
-      int			mSPRSYS_Status;
-      int			mSPRSYS_UnsafeAccess;
-      int			mSPRSYS_LastCarry;
-      int			mSPRSYS_Mathbit;
-      int			mSPRSYS_MathInProgress;
-
-      ULONG		mSUZYBUSEN;		// CPU
-
-      TSPRINIT	mSPRINIT;		// CPU
-
-      ULONG		mSPRGO;			// CPU
-      int			mEVERON;
-
-      UBYTE		mPenIndex[16];	// SCB
-
-      // Line rendering related variables
-
-      ULONG		mLineType;
-      ULONG		mLineShiftRegCount;
-      ULONG		mLineShiftReg;
-      ULONG		mLineRepeatCount;
-      ULONG		mLinePixel;
-      ULONG		mLinePacketBitsLeft;
-
-      int			mCollision;
-#ifdef MY_NO_STATIC
-      int vquadoff;
-      int hquadoff;
+#ifndef MY_SUSIE_VARS
+      #define VAR_PREFIX
+      #include "susie_vars.h"
+      #undef VAR_PREFIX
 #endif
-
-      UBYTE		*mRamPointer;
-
-      ULONG		mLineBaseAddress;
-      ULONG		mLineCollisionAddress;
-
-      // Joystick switches
-
-      TJOYSTICK	mJOYSTICK;
-      TSWITCHES	mSWITCHES;
 };
 
 #endif

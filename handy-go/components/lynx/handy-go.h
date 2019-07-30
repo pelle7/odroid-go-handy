@@ -2036,8 +2036,8 @@ typedef bool (RETRO_CALLCONV *retro_environment_t)(unsigned cmd, void *data);
  * Certain graphic APIs, such as OpenGL ES, do not like textures 
  * that are not packed in memory.
  */
-typedef void (RETRO_CALLCONV *retro_video_refresh_t)(const void *data, unsigned width,
-      unsigned height, size_t pitch);
+typedef void (RETRO_CALLCONV *retro_video_refresh_t)(const void *data/*, unsigned width,
+      unsigned height, size_t pitch*/);
 
 /* Renders a single audio frame. Should only be used if implementation 
  * generates a single sample at a time.

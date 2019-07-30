@@ -91,73 +91,116 @@
 //
 // Define the global variable list
 //
+#ifndef MY_GLOBAL_SYSTEM_VARS_CPU
+#ifdef SYSTEM_CPP
+ULONG   gSystemCycleCount=0;
+ULONG   gNextTimerEvent=0;
+ULONG   gCPUWakeupTime=0;
+ULONG   gIRQEntryCycle=0;
+ULONG   gCPUBootAddress=0;
+ULONG   gSystemIRQ=FALSE;
+ULONG   gSystemNMI=FALSE;
+ULONG   gSystemCPUSleep=FALSE;
+ULONG   gSystemCPUSleep_Saved=FALSE;
+ULONG   gSystemHalt=FALSE;
+ULONG   gAudioEnabled=FALSE;
+ULONG   gAudioLastUpdateCycle=0;
+ULONG   gAudioBufferPointer=0;
+UBYTE   *gAudioBuffer;
+#else
+extern ULONG    gSystemCycleCount;
+extern ULONG    gNextTimerEvent;
+extern ULONG    gCPUWakeupTime;
+extern ULONG    gIRQEntryCycle;
+extern ULONG    gCPUBootAddress;
+extern ULONG    gSystemIRQ;
+extern ULONG    gSystemNMI;
+extern ULONG    gSystemCPUSleep;
+extern ULONG    gSystemCPUSleep_Saved;
+extern ULONG    gSystemHalt;
+extern ULONG   gAudioEnabled;
+extern ULONG    gAudioLastUpdateCycle;
+extern ULONG   gAudioBufferPointer;
+extern UBYTE    *gAudioBuffer;
+#endif
+#define SYSTEM_VAR(var_name) var_name
+#define SYSTEM_CYCLE_ADD(count) gSystemCycleCount+=count
+#define MIKIE_AUDIO_POINTER_EXT gAudioBufferPointer
+#else
+typedef struct systemvars
+{
+ULONG   gSystemCycleCount=0;
+ULONG   gNextTimerEvent=0;
+ULONG   gCPUWakeupTime=0;
+ULONG   gIRQEntryCycle=0;
+ULONG   gCPUBootAddress=0;
+ULONG   gSystemIRQ=FALSE;
+ULONG   gSystemNMI=FALSE;
+ULONG   gSystemCPUSleep=FALSE;
+ULONG   gSystemCPUSleep_Saved=FALSE;
+ULONG   gSystemHalt=FALSE;
+ULONG   gAudioEnabled=FALSE;
+ULONG   gAudioLastUpdateCycle=0;
+ULONG   *gAudioBufferPointer;
+UBYTE   *gAudioBuffer;
+} systemvars;
+
+#define SYSTEM_VAR(var_name) gSystemVars->var_name
+#define SYSTEM_CYCLE_ADD(count) gSystemVars->gSystemCycleCount+=count
+#define MIKIE_AUDIO_POINTER_EXT (*(gSystemVars->gAudioBufferPointer))
+
+#ifndef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+#ifdef SYSTEM_CPP
+systemvars *gSystemVars;
+#else
+extern systemvars *gSystemVars;
+#endif
+#endif // MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+#endif
 
 #ifdef SYSTEM_CPP
-ULONG	gSystemCycleCount=0;
-ULONG	gNextTimerEvent=0;
-ULONG	gCPUWakeupTime=0;
-ULONG	gIRQEntryCycle=0;
-ULONG	gCPUBootAddress=0;
+#ifdef _LYNXDBG
 ULONG	gBreakpointHit=FALSE;
-ULONG	gSingleStepMode=FALSE;
+#endif
+//ULONG	gSingleStepMode=FALSE;
 //ULONG	gSingleStepModeSprites=FALSE;
-ULONG	gSystemIRQ=FALSE;
-ULONG	gSystemNMI=FALSE;
-ULONG	gSystemCPUSleep=FALSE;
-ULONG	gSystemCPUSleep_Saved=FALSE;
-ULONG	gSystemHalt=FALSE;
-ULONG	gThrottleMaxPercentage=100;
-ULONG	gThrottleLastTimerCount=0;
-ULONG	gThrottleNextCycleCheckpoint=0;
+//ULONG	gThrottleMaxPercentage=100;
+//ULONG	gThrottleLastTimerCount=0;
+//ULONG	gThrottleNextCycleCheckpoint=0;
 
-volatile ULONG gTimerCount=0;
+// volatile ULONG gTimerCount=0;
 
-ULONG	gAudioEnabled=FALSE;
+ULONG   *gAudioEnabledPointer;
 #ifdef MY_AUDIO_MODE_V1
 short   *gAudioBuffer;
 ULONG   gAudioBufferPointer=0;
 short   *gAudioBufferPointer2 = NULL;
-#else
-UBYTE   gAudioBuffer[HANDY_AUDIO_BUFFER_SIZE];
-ULONG   gAudioBufferPointer=0;
 #endif
-ULONG	gAudioLastUpdateCycle=0;
 
 CErrorInterface *gError=NULL;
 #else
-
-extern ULONG	gSystemCycleCount;
-extern ULONG	gNextTimerEvent;
-extern ULONG	gCPUWakeupTime;
-extern ULONG	gIRQEntryCycle;
-extern ULONG	gCPUBootAddress;
+#ifdef _LYNXDBG
 extern ULONG	gBreakpointHit;
-extern ULONG	gSingleStepMode;
+#endif
+//extern ULONG	gSingleStepMode;
 //extern ULONG	gSingleStepModeSprites;
-extern ULONG	gSystemIRQ;
-extern ULONG	gSystemNMI;
-extern ULONG	gSystemCPUSleep;
-extern ULONG	gSystemCPUSleep_Saved;
-extern ULONG	gSystemHalt;
-extern ULONG	gThrottleMaxPercentage;
-extern ULONG	gThrottleLastTimerCount;
-extern ULONG	gThrottleNextCycleCheckpoint;
+//extern ULONG	gThrottleMaxPercentage;
+//extern ULONG	gThrottleLastTimerCount;
+//extern ULONG	gThrottleNextCycleCheckpoint;
 
-extern volatile ULONG gTimerCount;
+// extern volatile ULONG gTimerCount;
 
-extern ULONG	gAudioEnabled;
+extern ULONG   *gAudioEnabledPointer;
 #ifdef MY_AUDIO_MODE_V1
 extern short    *gAudioBuffer;
 extern ULONG    gAudioBufferPointer;
 extern short   *gAudioBufferPointer2;
-#else
-extern UBYTE 	gAudioBuffer[HANDY_AUDIO_BUFFER_SIZE];
-extern ULONG	gAudioBufferPointer;
 #endif
-extern ULONG	gAudioLastUpdateCycle;
 
 extern CErrorInterface *gError;
 #endif
+
+#include "system_vars.h"
 
 typedef struct lssfile
 {
@@ -230,7 +273,7 @@ class CSystem : public CSystemBase
          //
          // Only update if there is a predicted timer event
          //
-         if(gSystemCycleCount>=gNextTimerEvent)
+         if(SYSTEM_VAR(gSystemCycleCount)>=SYSTEM_VAR(gNextTimerEvent))
          {
             mMikie->Update();
          }
@@ -243,8 +286,8 @@ class CSystem : public CSystemBase
 #ifdef _LYNXDBG
          // Check breakpoint
          static ULONG lastcycle=0;
-         if(lastcycle<mCycleCountBreakpoint && gSystemCycleCount>=mCycleCountBreakpoint) gBreakpointHit=TRUE;
-         lastcycle=gSystemCycleCount;
+         if(lastcycle<mCycleCountBreakpoint && SYSTEM_VAR(gSystemCycleCount)>=mCycleCountBreakpoint) gBreakpointHit=TRUE;
+         lastcycle=SYSTEM_VAR(gSystemCycleCount);
 
          // Check single step mode
          if(gSingleStepMode) gBreakpointHit=TRUE;
@@ -253,9 +296,9 @@ class CSystem : public CSystemBase
          //
          // If the CPU is asleep then skip to the next timer event
          //
-         if(gSystemCPUSleep)
+         if(SYSTEM_VAR(gSystemCPUSleep))
          {
-            gSystemCycleCount=gNextTimerEvent;
+            SYSTEM_VAR(gSystemCycleCount)=SYSTEM_VAR(gNextTimerEvent);
          }
 
          //			fprintf(stderr, "end sys update\n"); 
@@ -264,39 +307,70 @@ class CSystem : public CSystemBase
 #if MY_SYSTEM_LOOP==1
       inline void Update(void)
       {
-        if(gSystemCycleCount>=gNextTimerEvent)
+        if(SYSTEM_VAR(gSystemCycleCount)>=SYSTEM_VAR(gNextTimerEvent))
          {
             mMikie->Update();
          }
-         while (gSystemCycleCount<gNextTimerEvent) {
+ODROID_DEBUG_PERF_START()
+         while (SYSTEM_VAR(gSystemCycleCount)<SYSTEM_VAR(gNextTimerEvent)) {
             mCpu->Update();
-            if(gSystemCPUSleep)
+            if(SYSTEM_VAR(gSystemCPUSleep))
              {
-                gSystemCycleCount=gNextTimerEvent;
+                SYSTEM_VAR(gSystemCycleCount)=SYSTEM_VAR(gNextTimerEvent);
                 break;
              }
          }
+ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_CPU)
       }
 #endif
 #if MY_SYSTEM_LOOP==2
       inline void Update(void)
       {
-        if(gSystemCycleCount>=gNextTimerEvent)
+        if(SYSTEM_VAR(gSystemCycleCount)>=SYSTEM_VAR(gNextTimerEvent))
          {
             mMikie->Update();
          }
-         while (gSystemCycleCount<gNextTimerEvent) {
+ODROID_DEBUG_PERF_START()
+         while (SYSTEM_VAR(gSystemCycleCount)<SYSTEM_VAR(gNextTimerEvent)) {
             mCpu->Update();
             mCpu->Update();
             mCpu->Update();
-            if(gSystemCPUSleep)
+            if(SYSTEM_VAR(gSystemCPUSleep))
              {
-                gSystemCycleCount=gNextTimerEvent;
+                SYSTEM_VAR(gSystemCycleCount)=SYSTEM_VAR(gNextTimerEvent);
                 break;
              }
          }
+ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_CPU)
       }
 #endif
+
+    NOINLINE_ATTR void UpdateEndless(void)
+      {
+      while(true)
+      {
+      ODROID_DEBUG_PERF_START()
+        if(SYSTEM_VAR(gSystemCycleCount)>=SYSTEM_VAR(gNextTimerEvent))
+         {
+            ODROID_DEBUG_PERF_START()
+            mMikie->Update();
+            ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_MIKIE_UPDATE)
+         }
+         while (SYSTEM_VAR(gSystemCycleCount)<SYSTEM_VAR(gNextTimerEvent)) {
+            ODROID_DEBUG_PERF_START()
+            mCpu->Update();
+            mCpu->Update();
+            mCpu->Update();
+            ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_CPU)
+            if(SYSTEM_VAR(gSystemCPUSleep))
+             {
+                SYSTEM_VAR(gSystemCycleCount)=SYSTEM_VAR(gNextTimerEvent);
+                break;
+             }
+         }
+ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_TOTAL)
+        }
+      }
 
 #endif
       //
@@ -539,6 +613,9 @@ class CSystem : public CSystemBase
       CMikie			*mMikie;
       CSusie			*mSusie;
       CEEPROM			*mEEPROM;
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+      systemvars    *gSystemVars;
+#endif
 
       ULONG			mFileType;
 };

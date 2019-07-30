@@ -10,11 +10,11 @@
 
          //         TRACE_MIKIE0("Update()");
 
-         if(gSystemCycleCount>0xf0000000)
+         if(SYSTEM_VAR(gSystemCycleCount)>0xf0000000)
          {
-            gSystemCycleCount-=0x80000000;
-            gThrottleNextCycleCheckpoint-=0x80000000;
-            gAudioLastUpdateCycle-=0x80000000;
+            SYSTEM_VAR(gSystemCycleCount)-=0x80000000;
+            //gThrottleNextCycleCheckpoint-=0x80000000;
+            SYSTEM_VAR(gAudioLastUpdateCycle)-=0x80000000;
             mTIM_0_LAST_COUNT-=0x80000000;
             mTIM_1_LAST_COUNT-=0x80000000;
             mTIM_2_LAST_COUNT-=0x80000000;
@@ -28,31 +28,31 @@
             mAUDIO_2_LAST_COUNT-=0x80000000;
             mAUDIO_3_LAST_COUNT-=0x80000000;
             // Only correct if sleep is active
-            if(gCPUWakeupTime)
+            if(SYSTEM_VAR(gCPUWakeupTime))
             {
-               gCPUWakeupTime-=0x80000000;
-               gIRQEntryCycle-=0x80000000;
+               SYSTEM_VAR(gCPUWakeupTime)-=0x80000000;
+               SYSTEM_VAR(gIRQEntryCycle)-=0x80000000;
             }
          }
 
-         gNextTimerEvent=0xffffffff;
+         SYSTEM_VAR(gNextTimerEvent)=0xffffffff;
 
          //
          // Check if the CPU needs to be woken up from sleep mode
          //
-         if(gCPUWakeupTime)
+         if(SYSTEM_VAR(gCPUWakeupTime))
          {
-            if(gSystemCycleCount>=gCPUWakeupTime)
+            if(SYSTEM_VAR(gSystemCycleCount)>=SYSTEM_VAR(gCPUWakeupTime))
             {
                TRACE_MIKIE0("*********************************************************");
                TRACE_MIKIE0("****              CPU SLEEP COMPLETED                ****");
                TRACE_MIKIE0("*********************************************************");
                ClearCPUSleep();
-               gCPUWakeupTime=0;
+               SYSTEM_VAR(gCPUWakeupTime)=0;
             }
             else
             {
-               if(gCPUWakeupTime>gSystemCycleCount) gNextTimerEvent=gCPUWakeupTime;
+               if(SYSTEM_VAR(gCPUWakeupTime)>SYSTEM_VAR(gSystemCycleCount)) SYSTEM_VAR(gNextTimerEvent)=SYSTEM_VAR(gCPUWakeupTime);
             }
          }
 
@@ -101,7 +101,7 @@
                // Ordinary clocked mode as opposed to linked mode
                // 16MHz clock downto 1us == cyclecount >> 4
                divide=(4+mTIM_0_LINKING);
-               decval=(gSystemCycleCount-mTIM_0_LAST_COUNT)>>divide;
+               decval=(SYSTEM_VAR(gSystemCycleCount)-mTIM_0_LAST_COUNT)>>divide;
 
                if(decval)
                {
@@ -157,11 +157,11 @@
                // then CURRENT may still be negative and we can use it to
                // calc the next timer value, we just want another update ASAP
                tmp=(mTIM_0_CURRENT&0x80000000)?1:((mTIM_0_CURRENT+1)<<divide);
-               tmp+=gSystemCycleCount;
-               if(tmp<gNextTimerEvent)
+               tmp+=SYSTEM_VAR(gSystemCycleCount);
+               if(tmp<SYSTEM_VAR(gNextTimerEvent))
                {
-                  gNextTimerEvent=tmp;
-                  //                        TRACE_MIKIE1("Update() - TIMER 0 Set NextTimerEvent = %012d",gNextTimerEvent);
+                  SYSTEM_VAR(gNextTimerEvent)=tmp;
+                  //                        TRACE_MIKIE1("Update() - TIMER 0 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
                }
             }
             //              TRACE_MIKIE1("Update() - mTIM_0_CURRENT = %012d",mTIM_0_CURRENT);
@@ -195,7 +195,7 @@
             //                  // Ordinary clocked mode as opposed to linked mode
             //                  // 16MHz clock downto 1us == cyclecount >> 4
             //                  divide=(4+mTIM_2_LINKING);
-            //                  decval=(gSystemCycleCount-mTIM_2_LAST_COUNT)>>divide;
+            //                  decval=(SYSTEM_VAR(gSystemCycleCount)-mTIM_2_LAST_COUNT)>>divide;
             //              }
 
             if(decval)
@@ -242,8 +242,8 @@
             // be beaten by the line timer on Timer 0
             //              if(mTIM_2_LINKING!=7)
             //              {
-            //                  tmp=gSystemCycleCount+((mTIM_2_CURRENT+1)<<divide);
-            //                  if(tmp<gNextTimerEvent) gNextTimerEvent=tmp;
+            //                  tmp=SYSTEM_VAR(gSystemCycleCount)+((mTIM_2_CURRENT+1)<<divide);
+            //                  if(tmp<SYSTEM_VAR(gNextTimerEvent)) SYSTEM_VAR(gNextTimerEvent)=tmp;
             //              }
             //              TRACE_MIKIE1("Update() - mTIM_2_CURRENT = %012d",mTIM_2_CURRENT);
             //              TRACE_MIKIE1("Update() - mTIM_2_BKUP    = %012d",mTIM_2_BKUP);
@@ -278,7 +278,7 @@
                // 16MHz clock downto 1us == cyclecount >> 4
                // Additional /8 (+3) for 8 clocks per bit transmit
                divide=4+3+mTIM_4_LINKING;
-               decval=(gSystemCycleCount-mTIM_4_LAST_COUNT)>>divide;
+               decval=(SYSTEM_VAR(gSystemCycleCount)-mTIM_4_LAST_COUNT)>>divide;
             }
 
             if(decval)
@@ -386,7 +386,7 @@
                   if(mTIM_4_CURRENT&0x80000000)
                   {
                      mTIM_4_CURRENT=mTIM_4_BKUP;
-                     mTIM_4_LAST_COUNT=gSystemCycleCount;
+                     mTIM_4_LAST_COUNT=SYSTEM_VAR(gSystemCycleCount);
                   }
                   //                        }
                   //                        else
@@ -418,11 +418,11 @@
             // then CURRENT may still be negative and we can use it to
             // calc the next timer value, we just want another update ASAP
             tmp=(mTIM_4_CURRENT&0x80000000)?1:((mTIM_4_CURRENT+1)<<divide);
-            tmp+=gSystemCycleCount;
-            if(tmp<gNextTimerEvent)
+            tmp+=SYSTEM_VAR(gSystemCycleCount);
+            if(tmp<SYSTEM_VAR(gNextTimerEvent))
             {
-               gNextTimerEvent=tmp;
-               TRACE_MIKIE1("Update() - TIMER 4 Set NextTimerEvent = %012d",gNextTimerEvent);
+               SYSTEM_VAR(gNextTimerEvent)=tmp;
+               TRACE_MIKIE1("Update() - TIMER 4 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
             }
             //              }
             //              TRACE_MIKIE1("Update() - mTIM_4_CURRENT = %012d",mTIM_4_CURRENT);
@@ -441,7 +441,7 @@
          {
             TRACE_MIKIE0("Update() - UART TX IRQ Triggered");
             mTimerStatusFlags|=0x10;
-            gSystemIRQ=TRUE;    // Added 19/09/06 fix for IRQ issue
+            SYSTEM_VAR(gSystemIRQ)=TRUE;    // Added 19/09/06 fix for IRQ issue
          }
          // Is data waiting and the interrupt enabled, if so then
          // what are we waiting for....
@@ -449,7 +449,7 @@
          {
             TRACE_MIKIE0("Update() - UART RX IRQ Triggered");
             mTimerStatusFlags|=0x10;
-            gSystemIRQ=TRUE;    // Added 19/09/06 fix for IRQ issue
+            SYSTEM_VAR(gSystemIRQ)=TRUE;    // Added 19/09/06 fix for IRQ issue
          }
 
          //
@@ -463,7 +463,7 @@
                // Ordinary clocked mode as opposed to linked mode
                // 16MHz clock downto 1us == cyclecount >> 4
                divide=(4+mTIM_1_LINKING);
-               decval=(gSystemCycleCount-mTIM_1_LAST_COUNT)>>divide;
+               decval=(SYSTEM_VAR(gSystemCycleCount)-mTIM_1_LAST_COUNT)>>divide;
 
                if(decval)
                {
@@ -479,7 +479,7 @@
                      {
                         TRACE_MIKIE0("Update() - TIMER1 IRQ Triggered");
                         mTimerStatusFlags|=0x02;
-                        gSystemIRQ=TRUE;    // Added 19/09/06 fix for IRQ issue
+                        SYSTEM_VAR(gSystemIRQ)=TRUE;    // Added 19/09/06 fix for IRQ issue
                      }
 
                      // Reload if neccessary
@@ -517,11 +517,11 @@
                // then CURRENT may still be negative and we can use it to
                // calc the next timer value, we just want another update ASAP
                tmp=(mTIM_1_CURRENT&0x80000000)?1:((mTIM_1_CURRENT+1)<<divide);
-               tmp+=gSystemCycleCount;
-               if(tmp<gNextTimerEvent)
+               tmp+=SYSTEM_VAR(gSystemCycleCount);
+               if(tmp<SYSTEM_VAR(gNextTimerEvent))
                {
-                  gNextTimerEvent=tmp;
-                  TRACE_MIKIE1("Update() - TIMER 1 Set NextTimerEvent = %012d",gNextTimerEvent);
+                  SYSTEM_VAR(gNextTimerEvent)=tmp;
+                  TRACE_MIKIE1("Update() - TIMER 1 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
                }
             }
             //              TRACE_MIKIE1("Update() - mTIM_1_CURRENT = %012d",mTIM_1_CURRENT);
@@ -548,7 +548,7 @@
                // Ordinary clocked mode as opposed to linked mode
                // 16MHz clock downto 1us == cyclecount >> 4
                divide=(4+mTIM_3_LINKING);
-               decval=(gSystemCycleCount-mTIM_3_LAST_COUNT)>>divide;
+               decval=(SYSTEM_VAR(gSystemCycleCount)-mTIM_3_LAST_COUNT)>>divide;
             }
 
             if(decval)
@@ -565,7 +565,7 @@
                   {
                      TRACE_MIKIE0("Update() - TIMER3 IRQ Triggered");
                      mTimerStatusFlags|=0x08;
-                     gSystemIRQ=TRUE;   // Added 19/09/06 fix for IRQ issue
+                     SYSTEM_VAR(gSystemIRQ)=TRUE;   // Added 19/09/06 fix for IRQ issue
                   }
 
                   // Reload if neccessary
@@ -602,11 +602,11 @@
                // then CURRENT may still be negative and we can use it to
                // calc the next timer value, we just want another update ASAP
                tmp=(mTIM_3_CURRENT&0x80000000)?1:((mTIM_3_CURRENT+1)<<divide);
-               tmp+=gSystemCycleCount;
-               if(tmp<gNextTimerEvent)
+               tmp+=SYSTEM_VAR(gSystemCycleCount);
+               if(tmp<SYSTEM_VAR(gNextTimerEvent))
                {
-                  gNextTimerEvent=tmp;
-                  TRACE_MIKIE1("Update() - TIMER 3 Set NextTimerEvent = %012d",gNextTimerEvent);
+                  SYSTEM_VAR(gNextTimerEvent)=tmp;
+                  TRACE_MIKIE1("Update() - TIMER 3 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
                }
             }
             //              TRACE_MIKIE1("Update() - mTIM_3_CURRENT = %012d",mTIM_3_CURRENT);
@@ -633,7 +633,7 @@
                // Ordinary clocked mode as opposed to linked mode
                // 16MHz clock downto 1us == cyclecount >> 4
                divide=(4+mTIM_5_LINKING);
-               decval=(gSystemCycleCount-mTIM_5_LAST_COUNT)>>divide;
+               decval=(SYSTEM_VAR(gSystemCycleCount)-mTIM_5_LAST_COUNT)>>divide;
             }
 
             if(decval)
@@ -650,7 +650,7 @@
                   {
                      TRACE_MIKIE0("Update() - TIMER5 IRQ Triggered");
                      mTimerStatusFlags|=0x20;
-                     gSystemIRQ=TRUE;   // Added 19/09/06 fix for IRQ issue
+                     SYSTEM_VAR(gSystemIRQ)=TRUE;   // Added 19/09/06 fix for IRQ issue
                   }
 
                   // Reload if neccessary
@@ -687,11 +687,11 @@
                // then CURRENT may still be negative and we can use it to
                // calc the next timer value, we just want another update ASAP
                tmp=(mTIM_5_CURRENT&0x80000000)?1:((mTIM_5_CURRENT+1)<<divide);
-               tmp+=gSystemCycleCount;
-               if(tmp<gNextTimerEvent)
+               tmp+=SYSTEM_VAR(gSystemCycleCount);
+               if(tmp<SYSTEM_VAR(gNextTimerEvent))
                {
-                  gNextTimerEvent=tmp;
-                  TRACE_MIKIE1("Update() - TIMER 5 Set NextTimerEvent = %012d",gNextTimerEvent);
+                  SYSTEM_VAR(gNextTimerEvent)=tmp;
+                  TRACE_MIKIE1("Update() - TIMER 5 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
                }
             }
             //              TRACE_MIKIE1("Update() - mTIM_5_CURRENT = %012d",mTIM_5_CURRENT);
@@ -718,7 +718,7 @@
                // Ordinary clocked mode as opposed to linked mode
                // 16MHz clock downto 1us == cyclecount >> 4
                divide=(4+mTIM_7_LINKING);
-               decval=(gSystemCycleCount-mTIM_7_LAST_COUNT)>>divide;
+               decval=(SYSTEM_VAR(gSystemCycleCount)-mTIM_7_LAST_COUNT)>>divide;
             }
 
             if(decval)
@@ -735,7 +735,7 @@
                   {
                      TRACE_MIKIE0("Update() - TIMER7 IRQ Triggered");
                      mTimerStatusFlags|=0x80;
-                     gSystemIRQ=TRUE;   // Added 19/09/06 fix for IRQ issue
+                     SYSTEM_VAR(gSystemIRQ)=TRUE;   // Added 19/09/06 fix for IRQ issue
                   }
 
                   // Reload if neccessary
@@ -773,11 +773,11 @@
                // then CURRENT may still be negative and we can use it to
                // calc the next timer value, we just want another update ASAP
                tmp=(mTIM_7_CURRENT&0x80000000)?1:((mTIM_7_CURRENT+1)<<divide);
-               tmp+=gSystemCycleCount;
-               if(tmp<gNextTimerEvent)
+               tmp+=SYSTEM_VAR(gSystemCycleCount);
+               if(tmp<SYSTEM_VAR(gNextTimerEvent))
                {
-                  gNextTimerEvent=tmp;
-                  TRACE_MIKIE1("Update() - TIMER 7 Set NextTimerEvent = %012d",gNextTimerEvent);
+                  SYSTEM_VAR(gNextTimerEvent)=tmp;
+                  TRACE_MIKIE1("Update() - TIMER 7 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
                }
             }
             //              TRACE_MIKIE1("Update() - mTIM_7_CURRENT = %012d",mTIM_7_CURRENT);
@@ -797,7 +797,7 @@
                // Ordinary clocked mode as opposed to linked mode
                // 16MHz clock downto 1us == cyclecount >> 4
                divide=(4+mTIM_6_LINKING);
-               decval=(gSystemCycleCount-mTIM_6_LAST_COUNT)>>divide;
+               decval=(SYSTEM_VAR(gSystemCycleCount)-mTIM_6_LAST_COUNT)>>divide;
 
                if(decval)
                {
@@ -813,7 +813,7 @@
                      {
                         TRACE_MIKIE0("Update() - TIMER6 IRQ Triggered");
                         mTimerStatusFlags|=0x40;
-                        gSystemIRQ=TRUE;    // Added 19/09/06 fix for IRQ issue
+                        SYSTEM_VAR(gSystemIRQ)=TRUE;    // Added 19/09/06 fix for IRQ issue
                      }
 
                      // Reload if neccessary
@@ -852,11 +852,11 @@
                // then CURRENT may still be negative and we can use it to
                // calc the next timer value, we just want another update ASAP
                tmp=(mTIM_6_CURRENT&0x80000000)?1:((mTIM_6_CURRENT+1)<<divide);
-               tmp+=gSystemCycleCount;
-               if(tmp<gNextTimerEvent)
+               tmp+=SYSTEM_VAR(gSystemCycleCount);
+               if(tmp<SYSTEM_VAR(gNextTimerEvent))
                {
-                  gNextTimerEvent=tmp;
-                  TRACE_MIKIE1("Update() - TIMER 6 Set NextTimerEvent = %012d",gNextTimerEvent);
+                  SYSTEM_VAR(gNextTimerEvent)=tmp;
+                  TRACE_MIKIE1("Update() - TIMER 6 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
                }
             }
             //              TRACE_MIKIE1("Update() - mTIM_6_CURRENT = %012d",mTIM_6_CURRENT);
@@ -868,16 +868,16 @@
          //
          // If sound is enabled then update the sound subsystem
          //
-         if(gAudioEnabled)
+         if(SYSTEM_VAR(gAudioEnabled))
          {
             UpdateSound();
             UpdateCalcSound();
          }
 
-         //         if(gSystemCycleCount==gNextTimerEvent) gError->Warning("CMikie::Update() - gSystemCycleCount==gNextTimerEvent, system lock likely");
-         //         TRACE_MIKIE1("Update() - NextTimerEvent = %012d",gNextTimerEvent);
+         //         if(SYSTEM_VAR(gSystemCycleCount)==SYSTEM_VAR(gNextTimerEvent)) gError->Warning("CMikie::Update() - SYSTEM_VAR(gSystemCycleCount)==SYSTEM_VAR(gNextTimerEvent), system lock likely");
+         //         TRACE_MIKIE1("Update() - NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
 
          // Now all the timer updates are done we can increment the system
          // counter for any work done within the Update() function, gSystemCycleCounter
          // cannot be updated until this point otherwise it screws up the counters.
-         gSystemCycleCount+=mikie_work_done;
+         SYSTEM_CYCLE_ADD(mikie_work_done);

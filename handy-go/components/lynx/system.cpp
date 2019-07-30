@@ -58,6 +58,18 @@
 
 extern void lynx_decrypt(unsigned char * result, const unsigned char * encrypted, const int length);
 
+int lss_read_ulong(ULONG* dest, int varsize, int varcount,LSS_FILE *fp)
+{
+    ULONG copysize;
+    ULONG rc;
+   copysize=varsize*varcount;
+   if((fp->index + copysize) > fp->index_limit) copysize=fp->index_limit - fp->index;
+   memcpy(&rc,fp->memptr+fp->index,copysize);
+   fp->index+=copysize;
+   *dest = rc;
+   return copysize;
+}
+
 int lss_read(void* dest,int varsize, int varcount,LSS_FILE *fp)
 {
    ULONG copysize;
@@ -132,6 +144,13 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
     mEEPROM(NULL)
 {
    printf("CSystem: 001\n");
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU
+   //gSystemVars = MY_MEM_ALLOC_FAST_EXT(systemvars, sizeof(systemvars)/4, 4);
+   gSystemVars = MY_MEM_ALLOC_FAST_EXT(systemvars, sizeof(systemvars), 1);
+#endif
+   gAudioEnabledPointer = &SYSTEM_VAR(gAudioEnabled);
+   SYSTEM_VAR(gAudioBuffer) = MY_MEM_ALLOC_FAST_EXT(UBYTE, HANDY_AUDIO_BUFFER_SIZE, 1);
+
 #ifdef _LYNXDBG
    mpDebugCallback=NULL;
    mDebugCallbackObject=0;
@@ -230,7 +249,11 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
    {
       case HANDY_FILETYPE_RAW:
       case HANDY_FILETYPE_LNX:
-         mCart = new CCart(filememory,filesize);
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+         mCart = new CCart(filememory,filesize, gSystemVars);
+#else
+        mCart = new CCart(filememory,filesize);
+#endif
          if(mCart->CartHeaderLess())
          {// veryvery strange Howard Check CANNOT work, as there are two different loader-less card types...
           // unclear HOW this should do anything useful...
@@ -273,13 +296,21 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
          }
          break;
       case HANDY_FILETYPE_HOMEBREW:
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+         mCart = new CCart(0,0, NULL);
+#else
          mCart = new CCart(0,0);
+#endif
          mRam = new CRam(filememory,filesize);
          break;
       case HANDY_FILETYPE_SNAPSHOT:
       case HANDY_FILETYPE_ILLEGAL:
       default:
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+         mCart = new CCart(0,0, NULL);
+#else
          mCart = new CCart(0,0);
+#endif
          mRam = new CRam(0,0);
          break;
    }
@@ -296,6 +327,20 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
    // Now the handlers are set we can instantiate the CPU as is will use handlers on reset
 
    mCpu = new C65C02(*this);
+   
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+   mCpu->gSystemVars = gSystemVars;
+   mMikie->gSystemVars = gSystemVars;
+   mSusie->gSystemVars = gSystemVars;
+   mCart->gSystemVars = gSystemVars;
+   mRam->gSystemVars = gSystemVars;
+   mRom->gSystemVars = gSystemVars;
+   gSystemVars->gAudioBufferPointer = &mMikie->gAudioBufferPointer;
+#endif
+   mMikie->gAudioBuffer = SYSTEM_VAR(gAudioBuffer);
+   mMikie->mSusie = mSusie;
+   mCpu->Reset();
+   mRam->Reset();
 
    // Now init is complete do a reset, this will cause many things to be reset twice
    // but what the hell, who cares, I don't.....
@@ -324,17 +369,6 @@ void _splitpath(const char* path, char* drv, char* dir, char* name, char* ext)
       printf("filename %d %s %s\n",mCart->mEEPROMType,gamefile,eepromfile);
       mEEPROM->Load();
    }
-#ifdef MY_DEBUG_OUT
-   printf("%-20s: %ps\n", "system.var", &mCycleCountBreakpoint);
-   printf("%-20s: %ps\n", "system.mCart", mCart);
-   printf("%-20s: %ps\n", "system.mRom", mRom);
-   printf("%-20s: %ps\n", "system.mMemMap", mMemMap);
-   printf("%-20s: %ps\n", "system.mRam", mRam);
-   printf("%-20s: %ps\n", "system.mCpu", mCpu);
-   printf("%-20s: %ps\n", "system.mMikie", mMikie);
-   printf("%-20s: %ps\n", "system.mSusie", mSusie);
-   printf("%-20s: %ps\n", "system.mEEPROM", mEEPROM);
-#endif
 }
 
 void CSystem::SaveEEPROM(void)
@@ -435,29 +469,31 @@ void CSystem::HLE_BIOS_FF80(void)
 
 void CSystem::Reset(void)
 {
-   gSystemCycleCount=0;
-   gNextTimerEvent=0;
-   gCPUBootAddress=0;
+   SYSTEM_VAR(gSystemCycleCount)=0;
+   SYSTEM_VAR(gNextTimerEvent)=0;
+   SYSTEM_VAR(gCPUBootAddress)=0;
+#ifdef _LYNXDBG
    gBreakpointHit=FALSE;
-   gSingleStepMode=FALSE;
+#endif
+   //gSingleStepMode=FALSE;
    //gSingleStepModeSprites=FALSE;
-   gSystemIRQ=FALSE;
-   gSystemNMI=FALSE;
-   gSystemCPUSleep=FALSE;
-   gSystemHalt=FALSE;
+   SYSTEM_VAR(gSystemIRQ)=FALSE;
+   SYSTEM_VAR(gSystemNMI)=FALSE;
+   SYSTEM_VAR(gSystemCPUSleep)=FALSE;
+   SYSTEM_VAR(gSystemHalt)=FALSE;
 
-   gThrottleLastTimerCount=0;
-   gThrottleNextCycleCheckpoint=0;
+   //gThrottleLastTimerCount=0;
+   //gThrottleNextCycleCheckpoint=0;
 
-   gTimerCount=0;
+   // gTimerCount=0;
 
-   gAudioBufferPointer=0;
-   gAudioLastUpdateCycle=0;
+   MIKIE_AUDIO_POINTER_EXT=0;
+   SYSTEM_VAR(gAudioLastUpdateCycle)=0;
 //	memset(gAudioBuffer,128,HANDY_AUDIO_BUFFER_SIZE); // only for unsigned 8bit
-	memset(gAudioBuffer,0,HANDY_AUDIO_BUFFER_SIZE); // for unsigned 8/16 bit
+	memset(SYSTEM_VAR(gAudioBuffer),0,HANDY_AUDIO_BUFFER_SIZE); // for unsigned 8/16 bit
 
 #ifdef _LYNXDBG
-   gSystemHalt=TRUE;
+   SYSTEM_VAR(gSystemHalt)=TRUE;
 #endif
 
    mMemMap->Reset();
@@ -477,7 +513,7 @@ void CSystem::Reset(void)
 
       C6502_REGS regs;
       mCpu->GetRegs(regs);
-      regs.PC=(UWORD)gCPUBootAddress;
+      regs.PC=(UWORD)SYSTEM_VAR(gCPUBootAddress);
       mCpu->SetRegs(regs);
    }else{
       if(!mRom->mValid)
@@ -524,34 +560,39 @@ bool CSystem::ContextSave(FILE *fp)
    if(!fprintf(fp,LSS_VERSION)) status=0;
 
    // Save ROM CRC
+   ULONG tmp;
    ULONG checksum=mCart->CRC32();
    if(!fwrite(&checksum,sizeof(ULONG),1,fp)) status=0;
 
    if(!fprintf(fp,"CSystem::ContextSave")) status=0;
 
    if(!fwrite(&mCycleCountBreakpoint,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gSystemCycleCount,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gNextTimerEvent,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gCPUWakeupTime,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gCPUBootAddress,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gIRQEntryCycle,sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&SYSTEM_VAR(gSystemCycleCount),sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&SYSTEM_VAR(gNextTimerEvent),sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&SYSTEM_VAR(gCPUWakeupTime),sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&SYSTEM_VAR(gCPUBootAddress),sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&SYSTEM_VAR(gIRQEntryCycle),sizeof(ULONG),1,fp)) status=0;
+#ifdef _LYNXDBG
    if(!fwrite(&gBreakpointHit,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gSingleStepMode,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gSystemIRQ,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gSystemNMI,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gSystemCPUSleep,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gSystemCPUSleep_Saved,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gSystemHalt,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gThrottleMaxPercentage,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gThrottleLastTimerCount,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gThrottleNextCycleCheckpoint,sizeof(ULONG),1,fp)) status=0;
+#else
+	if(!fwrite(&tmp,sizeof(ULONG),1,fp)) status=0; // gBreakpointHit
+#endif
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) status=0; // gSingleStepMode
+   if(!fwrite(&SYSTEM_VAR(gSystemIRQ),sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&SYSTEM_VAR(gSystemNMI),sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&SYSTEM_VAR(gSystemCPUSleep),sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&SYSTEM_VAR(gSystemCPUSleep_Saved),sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&SYSTEM_VAR(gSystemHalt),sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) status=0;//gThrottleMaxPercentage
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) status=0;//gThrottleLastTimerCount
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) status=0;//gThrottleNextCycleCheckpoint
 
-   ULONG tmp=gTimerCount;
+   tmp=0;//gTimerCount;
    if(!fwrite(&tmp,sizeof(ULONG),1,fp)) status=0;
 
    // ** if(!fwrite(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
    // ** if(!fwrite(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
-   if(!fwrite(&gAudioLastUpdateCycle,sizeof(ULONG),1,fp)) status=0;
+   if(!fwrite(&SYSTEM_VAR(gAudioLastUpdateCycle),sizeof(ULONG),1,fp)) status=0;
 
    // Save other device contexts
    if(!mMemMap->ContextSave(fp)) status=0;
@@ -658,31 +699,35 @@ bool CSystem::MemoryContextLoad(const char *context, size_t size)
       if(!lss_read(teststr,sizeof(char),20,fp)) status=0;
       teststr[20]=0;
       if(strcmp(teststr,"CSystem::ContextSave")!=0) status=0;
+      ULONG tmp;
 
       if(!lss_read(&mCycleCountBreakpoint,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemCycleCount,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gNextTimerEvent,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gCPUWakeupTime,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gCPUBootAddress,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gIRQEntryCycle,sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&SYSTEM_VAR(gSystemCycleCount),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&SYSTEM_VAR(gNextTimerEvent),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&SYSTEM_VAR(gCPUWakeupTime),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&SYSTEM_VAR(gCPUBootAddress),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&SYSTEM_VAR(gIRQEntryCycle),sizeof(ULONG),1,fp)) status=0;
+#ifdef _LYNXDBG
       if(!lss_read(&gBreakpointHit,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSingleStepMode,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemIRQ,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemNMI,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemCPUSleep,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemCPUSleep_Saved,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemHalt,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gThrottleMaxPercentage,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gThrottleLastTimerCount,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gThrottleNextCycleCheckpoint,sizeof(ULONG),1,fp)) status=0;
-
-      ULONG tmp;
+#else
       if(!lss_read(&tmp,sizeof(ULONG),1,fp)) status=0;
-      gTimerCount=tmp;
+#endif
+      if(!lss_read(&tmp,sizeof(ULONG),1,fp)) status=0; // gSingleStepMode
+      if(!lss_read(&SYSTEM_VAR(gSystemIRQ),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&SYSTEM_VAR(gSystemNMI),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&SYSTEM_VAR(gSystemCPUSleep),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&SYSTEM_VAR(gSystemCPUSleep_Saved),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&SYSTEM_VAR(gSystemHalt),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&tmp,sizeof(ULONG),1,fp)) status=0;//gThrottleMaxPercentage
+      if(!lss_read(&tmp,sizeof(ULONG),1,fp)) status=0;//gThrottleLastTimerCount
+      if(!lss_read(&tmp,sizeof(ULONG),1,fp)) status=0;//gThrottleNextCycleCheckpoint
+
+      if(!lss_read(&tmp,sizeof(ULONG),1,fp)) status=0;
+      // gTimerCount=tmp;
 
       //if(!lss_read(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
       //if(!lss_read(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gAudioLastUpdateCycle,sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read(&SYSTEM_VAR(gAudioLastUpdateCycle),sizeof(ULONG),1,fp)) status=0;
 
       if(!mMemMap->ContextLoad(fp)) status=0;
       // Legacy support
@@ -777,31 +822,35 @@ bool CSystem::ContextLoad(FILE *fp_full)
       if(!lss_read(teststr,sizeof(char),20,fp)) status=0;
       teststr[20]=0;
       if(strcmp(teststr,"CSystem::ContextSave")!=0) status=0;
-
-      if(!lss_read(&mCycleCountBreakpoint,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemCycleCount,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gNextTimerEvent,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gCPUWakeupTime,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gCPUBootAddress,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gIRQEntryCycle,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gBreakpointHit,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSingleStepMode,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemIRQ,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemNMI,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemCPUSleep,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemCPUSleep_Saved,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gSystemHalt,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gThrottleMaxPercentage,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gThrottleLastTimerCount,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gThrottleNextCycleCheckpoint,sizeof(ULONG),1,fp)) status=0;
-
       ULONG tmp;
+
+      if(!lss_read_ulong(&mCycleCountBreakpoint,sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&SYSTEM_VAR(gSystemCycleCount),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&SYSTEM_VAR(gNextTimerEvent),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&SYSTEM_VAR(gCPUWakeupTime),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&SYSTEM_VAR(gCPUBootAddress),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&SYSTEM_VAR(gIRQEntryCycle),sizeof(ULONG),1,fp)) status=0;
+#ifdef _LYNXDBG
+      if(!lss_read_ulong(&gBreakpointHit,sizeof(ULONG),1,fp)) status=0;
+#else
+      if(!lss_read_ulong(&tmp,sizeof(ULONG),1,fp)) status=0;
+#endif
+      if(!lss_read_ulong(&tmp,sizeof(ULONG),1,fp)) status=0; // gSingleStepMode
+      if(!lss_read_ulong(&SYSTEM_VAR(gSystemIRQ),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&SYSTEM_VAR(gSystemNMI),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&SYSTEM_VAR(gSystemCPUSleep),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&SYSTEM_VAR(gSystemCPUSleep_Saved),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&SYSTEM_VAR(gSystemHalt),sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&tmp,sizeof(ULONG),1,fp)) status=0;//gThrottleMaxPercentage
+      if(!lss_read_ulong(&tmp,sizeof(ULONG),1,fp)) status=0;//gThrottleLastTimerCount
+      if(!lss_read_ulong(&tmp,sizeof(ULONG),1,fp)) status=0;//gThrottleNextCycleCheckpoint
+
       if(!lss_read(&tmp,sizeof(ULONG),1,fp)) status=0;
-      gTimerCount=tmp;
+      // gTimerCount=tmp;
 
       // ** if(!lss_read(gAudioBuffer,sizeof(UBYTE),HANDY_AUDIO_BUFFER_SIZE,fp)) status=0;
       // ** if(!lss_read(&gAudioBufferPointer,sizeof(ULONG),1,fp)) status=0;
-      if(!lss_read(&gAudioLastUpdateCycle,sizeof(ULONG),1,fp)) status=0;
+      if(!lss_read_ulong(&SYSTEM_VAR(gAudioLastUpdateCycle),sizeof(ULONG),1,fp)) status=0;
 
       if(!mMemMap->ContextLoad(fp)) status=0;
       // Legacy support
@@ -837,7 +886,7 @@ void CSystem::DebugTrace(int address)
    char message[1024+1];
    int count=0;
 
-   sprintf(message,"%08x - DebugTrace(): ",gSystemCycleCount);
+   sprintf(message,"%08x - DebugTrace(): ",SYSTEM_VAR(gSystemCycleCount));
    count=strlen(message);
 
    if(address)

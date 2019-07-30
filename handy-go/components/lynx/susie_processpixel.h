@@ -1,3 +1,4 @@
+ODROID_DEBUG_PERF_START()
 //
 // Collision code modified by KW 22/11/98
 // Collision buffer cler added if there is no
@@ -206,3 +207,4 @@
          //         _asm int 3;
          break;
    }
+ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_SUSIE_PROCESSPIXEL)

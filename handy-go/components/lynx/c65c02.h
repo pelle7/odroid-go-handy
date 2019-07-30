@@ -195,12 +195,12 @@ class C65C02
          mOpcode=regs.Opcode;
          mOperand=regs.Operand;
          CPU_UPDATE_mPC( regs.PC );
-         gSystemCPUSleep=regs.WAIT;
+         SYSTEM_VAR(gSystemCPUSleep)=regs.WAIT;
 #ifdef _LYNXDBG
          for(int loop=0;loop<MAX_CPU_BREAKPOINTS;loop++)	mPcBreakpoints[loop]=regs.cpuBreakpoints[loop];
 #endif
-         gSystemNMI=regs.NMI;
-         gSystemIRQ=regs.IRQ;
+         SYSTEM_VAR(gSystemNMI)=regs.NMI;
+         SYSTEM_VAR(gSystemIRQ)=regs.IRQ;
       }
 
       inline void GetRegs(C6502_REGS &regs)
@@ -213,12 +213,12 @@ class C65C02
          regs.Opcode=mOpcode;
          regs.Operand=mOperand;
          regs.PC=mPC;
-         regs.WAIT=(gSystemCPUSleep)?true:false;
+         regs.WAIT=(SYSTEM_VAR(gSystemCPUSleep))?true:false;
 #ifdef _LYNXDBG
          for(int loop=0;loop<MAX_CPU_BREAKPOINTS;loop++)	regs.cpuBreakpoints[loop]=mPcBreakpoints[loop];
 #endif
-         regs.NMI=(gSystemNMI)?true:false;
-         regs.IRQ=(gSystemIRQ)?true:false;
+         regs.NMI=(SYSTEM_VAR(gSystemNMI))?true:false;
+         regs.IRQ=(SYSTEM_VAR(gSystemIRQ))?true:false;
       }
 
       inline int GetPC(void) { return mPC; }
@@ -226,7 +226,7 @@ class C65C02
       inline void xILLEGAL(void)
       {
          //fprintf(stderr, "C65C02::Update() - Illegal opcode (%02x) at PC=$%04x.",mOpcode,mPC);
-         gSystemCycleCount++;
+         SYSTEM_VAR(gSystemCycleCount)++;
       }
 
    private:
@@ -258,6 +258,11 @@ class C65C02
       int mDbgFlag;
 #endif
       UBYTE *mRamPointer;
+      public:
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+      systemvars    *gSystemVars;
+#endif
+    private:
 
       // Associated lookup tables
 

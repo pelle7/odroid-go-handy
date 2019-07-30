@@ -7,7 +7,7 @@
    {
       TRACE_MIKIE0("Update() - TIMER2 IRQ Triggered (Frame Timer)");
       mTimerStatusFlags|=0x04;
-      gSystemIRQ=TRUE;  // Added 19/09/06 fix for IRQ issue
+      SYSTEM_VAR(gSystemIRQ)=TRUE;  // Added 19/09/06 fix for IRQ issue
    }
 
    //   TRACE_MIKIE0("Update() - Frame end");

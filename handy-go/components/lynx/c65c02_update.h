@@ -56,10 +56,10 @@
          mOpcode=CPU_PEEK(mPC);
          TRACE_CPU2("Update() PC=$%04x, Opcode=%02x",mPC,mOpcode);
          mPC++;
-#ifdef MY_DEBUG_OUT         
-         cpu_update++;
-         cpu_calls[mOpcode]++;
+#ifdef ODROID_DEBUG_PERF_CPU_ALL_INSTR
+         ODROID_DEBUG_PERF_START()
 #endif
+
          // Execute Opcode
 
          switch(mOpcode)
@@ -1445,6 +1445,10 @@
                xILLEGAL();
                break;
          }
+#ifdef ODROID_DEBUG_PERF_CPU_ALL_INSTR
+         ODROID_DEBUG_PERF_INCR(0x0100 + (ULONG)mOpcode)
+         ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_CPU)
+#endif
 
 #ifdef _LYNXDBG
 

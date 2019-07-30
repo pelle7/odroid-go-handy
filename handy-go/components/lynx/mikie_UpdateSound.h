@@ -1,9 +1,9 @@
 #ifndef MY_AUDIO_MODE
 {
-          int count = (gSystemCycleCount-gAudioLastUpdateCycle)/HANDY_AUDIO_SAMPLE_PERIOD;
+          int count = (SYSTEM_VAR(gSystemCycleCount)-SYSTEM_VAR(gAudioLastUpdateCycle))/HANDY_AUDIO_SAMPLE_PERIOD;
           if (count == 0) return;
     
-          gAudioLastUpdateCycle+=count*HANDY_AUDIO_SAMPLE_PERIOD;
+          SYSTEM_VAR(gAudioLastUpdateCycle)+=count*HANDY_AUDIO_SAMPLE_PERIOD;
           
           int cur_lsample = 0;
           int cur_rsample = 0;
@@ -47,7 +47,7 @@
         
         
                                 
-            for(;gAudioLastUpdateCycle+HANDY_AUDIO_SAMPLE_PERIOD<gSystemCycleCount;gAudioLastUpdateCycle+=HANDY_AUDIO_SAMPLE_PERIOD)
+            for(;SYSTEM_VAR(gAudioLastUpdateCycle)+HANDY_AUDIO_SAMPLE_PERIOD<SYSTEM_VAR(gSystemCycleCount);SYSTEM_VAR(gAudioLastUpdateCycle)+=HANDY_AUDIO_SAMPLE_PERIOD)
             {
                // Output audio sample
                 // Stereo 16 bit signed
@@ -105,7 +105,7 @@ inline void CMikie::UpdateSound(void)
         
         
                                 
-            for(;gAudioLastUpdateCycle+HANDY_AUDIO_SAMPLE_PERIOD<gSystemCycleCount;gAudioLastUpdateCycle+=HANDY_AUDIO_SAMPLE_PERIOD)
+            for(;SYSTEM_VAR(gAudioLastUpdateCycle)+HANDY_AUDIO_SAMPLE_PERIOD<SYSTEM_VAR(gSystemCycleCount);SYSTEM_VAR(gAudioLastUpdateCycle)+=HANDY_AUDIO_SAMPLE_PERIOD)
             {
                // Output audio sample
                 // Stereo 16 bit signed
@@ -129,10 +129,10 @@ inline void CMikie::UpdateSound(void)
 #if MY_AUDIO_MODE==1
 
 {
-    int count = (gSystemCycleCount-gAudioLastUpdateCycle)/HANDY_AUDIO_SAMPLE_PERIOD;
+    int count = (SYSTEM_VAR(gSystemCycleCount)-SYSTEM_VAR(gAudioLastUpdateCycle))/HANDY_AUDIO_SAMPLE_PERIOD;
     if (count == 0) return;
     
-    gAudioLastUpdateCycle+=count*HANDY_AUDIO_SAMPLE_PERIOD;
+    SYSTEM_VAR(gAudioLastUpdateCycle)+=count*HANDY_AUDIO_SAMPLE_PERIOD;
     
           int cur_lsample = 0;
           int cur_rsample = 0;
@@ -269,10 +269,10 @@ inline void CMikie::UpdateSound(void)
 #if MY_AUDIO_MODE==2
 
 {
-          int count = (gSystemCycleCount-gAudioLastUpdateCycle)/HANDY_AUDIO_SAMPLE_PERIOD;
+          int count = (SYSTEM_VAR(gSystemCycleCount)-SYSTEM_VAR(gAudioLastUpdateCycle))/HANDY_AUDIO_SAMPLE_PERIOD;
           if (count == 0) return;
     
-          gAudioLastUpdateCycle+=count*HANDY_AUDIO_SAMPLE_PERIOD;
+          SYSTEM_VAR(gAudioLastUpdateCycle)+=count*HANDY_AUDIO_SAMPLE_PERIOD;
           
           int cur_lsample = 0;
           int cur_rsample = 0;

@@ -44,33 +44,33 @@ const char* SD_BASE_PATH = "/sd";
 
 #define AUDIO_BUFFER_SIZE 2756
 
-struct audio_meta {
-    //uint8_t *buffer;
-    short *buffer;
-    int length;
-};
-
 uint32_t *lynx_mColourMap;
 //uint16 palette[PALETTE_SIZE];
 uint16 *palette = NULL;
 uint16_t* framebuffer[2]; // uint8_t*
 int currentFramebuffer = 0;
 
-//extern unsigned char *gAudioBuffer;
-//extern unsigned char *gAudioBufferPointer2;
+#ifdef MY_AUDIO_MODE_V1
+struct audio_meta {
+    //uint8_t *buffer;
+    short *buffer;
+    int length;
+};
+
 extern short *gAudioBuffer;
 extern short *gAudioBufferPointer2;
 
 struct audio_meta audio_update1 = {0,};
 struct audio_meta audio_update2 = {0,};
 struct audio_meta *audio_update = &audio_update1;
+QueueHandle_t audioQueue;
+TaskHandle_t audioTaskHandle;
+#endif
 
 spi_flash_mmap_handle_t hrom;
 
 QueueHandle_t vidQueue;
 TaskHandle_t videoTaskHandle;
-QueueHandle_t audioQueue;
-TaskHandle_t audioTaskHandle;
 
 odroid_volume_level Volume;
 odroid_battery_state battery;
@@ -244,7 +244,7 @@ NOINLINE void update_display_task()
     printf("VIDEO: Task: Start done\n");
 }
 
-
+#ifdef MY_AUDIO_MODE_V1
 volatile bool AudioTaskIsRunning = false;
 void audioTask(void* arg)
 {
@@ -273,6 +273,7 @@ void audioTask(void* arg)
 
   while (1) {}
 }
+#endif
 
 //Read an unaligned byte.
 char unalChar(const unsigned char *adr) {
@@ -298,9 +299,12 @@ NOINLINE void PowerDown()
 
     // Clear audio to prevent studdering
     printf("PowerDown: stopping audio.\n");
-    // odroid_audio_terminate();
+#ifdef MY_AUDIO_MODE_V1
     xQueueSend(audioQueue, &exitAudioTask, portMAX_DELAY);
     while (AudioTaskIsRunning) {}
+#else
+    odroid_audio_terminate();
+#endif
 
     // Stop tasks
     printf("PowerDown: stopping tasks.\n");
@@ -330,10 +334,12 @@ NOINLINE void DoMenuHome(bool save)
 
     // Clear audio to prevent studdering
     printf("PowerDown: stopping audio.\n");
-    //odroid_audio_terminate();
+#ifdef MY_AUDIO_MODE_V1
     xQueueSend(audioQueue, &exitAudioTask, portMAX_DELAY);
     while (AudioTaskIsRunning) {}
-
+#else
+    odroid_audio_terminate();
+#endif
 
     // Stop tasks
     printf("PowerDown: stopping tasks.\n");
@@ -376,10 +382,10 @@ void system_manage_sram(uint8 *sram, int slot, int mode)
 }
 */
 
-extern uint32    gAudioEnabled;
+extern uint32    *gAudioEnabledPointer;
 
 void menu_lynx_audio_update(odroid_ui_entry *entry) {
-    if (gAudioEnabled) {
+    if (*gAudioEnabledPointer) {
         sprintf(entry->text, "%-9s: %s", "audio", "on");
     } else {
         sprintf(entry->text, "%-9s: %s", "audio", "off");
@@ -387,7 +393,7 @@ void menu_lynx_audio_update(odroid_ui_entry *entry) {
 }
 
 odroid_ui_func_toggle_rc menu_lynx_audio_toggle(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
-    gAudioEnabled = !gAudioEnabled;
+    *gAudioEnabledPointer = !(*gAudioEnabledPointer);
     return ODROID_UI_FUNC_TOGGLE_RC_CHANGED;
 }
 
@@ -479,6 +485,13 @@ inline void update_ui_fps() {
       /*if (config_ui_stats) {
         update_ui_fps_text(fps);
       }*/
+#ifdef ODROID_DEBUG_PERF_USE
+    odroid_debug_perf_log_specific(ODROID_DEBUG_PERF_TOTAL, 269334479);
+    odroid_debug_perf_log_specific(ODROID_DEBUG_PERF_CPU, 230473555);
+    odroid_debug_perf_log_specific(ODROID_DEBUG_PERF_SUSIE_PAINTSPRITES, 144456221);
+    odroid_debug_perf_log_specific(ODROID_DEBUG_PERF_SUSIE_PAINTSPRITES_VLOOP, 135921297);
+#endif
+ODROID_DEBUG_PERF_LOG()
     }
     startTime = stopTime;
     // usleep(20*1000UL);
@@ -724,8 +737,7 @@ int16_t odroid_retro_input_state_t(unsigned port, unsigned device,
 
 
 bool skipNextFrame = true;
-void odroid_retro_video_refresh_t(const void *data, unsigned width,
-      unsigned height, size_t pitch) {
+void odroid_retro_video_refresh_t(const void *data) {
 	 if ((frame%frameskip)==1) {
      	xQueueSend(vidQueue, &data, portMAX_DELAY);
      	skipNextFrame = true;
@@ -831,6 +843,7 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
     printf("app_main: framebuffer[1]=%p\n", framebuffer[1]);
 
 
+#ifdef MY_AUDIO_MODE_V1
     audio_update1.buffer = MY_MEM_ALLOC_SLOW_EXT(short, AUDIO_BUFFER_SIZE, 1);
     //audio_update1.buffer = heap_caps_malloc(AUDIO_BUFFER_SIZE, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); // slower?
     if (!audio_update1.buffer) abort();
@@ -840,7 +853,6 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
     if (!audio_update2.buffer) abort();
 
     gAudioBuffer = audio_update1.buffer;
-#ifdef MY_AUDIO_MODE_V1
     gAudioBufferPointer2 = gAudioBuffer;
 #endif
     
@@ -939,10 +951,11 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
 
     vidQueue = xQueueCreate(1, sizeof(uint16_t*));
     //xTaskCreatePinnedToCore(&videoTask, "videoTask", 1024 * 4, NULL, 5, &videoTaskHandle, 1);
+#ifdef MY_AUDIO_MODE_V1
     audioQueue = xQueueCreate(1, sizeof(uint16_t*));
-    xTaskCreatePinnedToCore(&audioTask, "audioTask", 2048, NULL, 5, NULL, 1); //768
-    
-    
+    xTaskCreatePinnedToCore(&audioTask, "audioTask", 2048, NULL, 5, NULL, 1); //768    
+#endif
+
     esp_err_t r = odroid_sdcard_open(SD_BASE_PATH);
     if (r != ESP_OK)
     {
@@ -1004,7 +1017,7 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
     scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_SMS) ? false : true;
     
     odroid_ui_debug_enter_loop();
-#ifdef MY_DEBUG_OUT
+#ifdef ODROID_DEBUG_PERF_USE
     printf("heap_caps metadata test\n");
     heap_caps_print_heap_info(MALLOC_CAP_8BIT);
     heap_caps_print_heap_info(MALLOC_CAP_32BIT);
@@ -1047,6 +1060,8 @@ void app_main(void)
 }
 
 void *my_special_alloc(unsigned char speed, unsigned char bytes, unsigned long size) {
+    // if (size==16384) speed = 1;
+    
     uint32_t caps = (speed?MALLOC_CAP_INTERNAL:MALLOC_CAP_SPIRAM) | 
       ( bytes==1?MALLOC_CAP_8BIT:MALLOC_CAP_32BIT);
       /*
@@ -1115,7 +1130,7 @@ void SaveState()
         {
             uint8_t buf[8];
             memset(buf, 0, 8);
-            buf[0] = gAudioEnabled&0xff;
+            buf[0] = (*gAudioEnabledPointer)&0xff;
             buf[1] = scaling_enabled&0xff;
             buf[2] = filtering&0xff;
             buf[3] = rotate&0xff;
@@ -1160,7 +1175,7 @@ void LoadState(const char* cartName)
                 uint8_t buf[8];
                 memset(buf, 0, 8);
                 fread(buf,sizeof(uint8_t),8,f);
-                gAudioEnabled = buf[0];
+                *gAudioEnabledPointer = buf[0];
                 scaling_enabled = buf[1];
                 filtering = buf[2];
                 rotate = buf[3];

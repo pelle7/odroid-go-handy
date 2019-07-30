@@ -56,8 +56,14 @@
 #include "scrc32.h"
 #include <iostream> // pelle7
 
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU_MEMBER
+CCart::CCart(UBYTE *gamedata,ULONG gamesize, systemvars *gSystemVars)
+{
+    this->gSystemVars = gSystemVars;
+#else
 CCart::CCart(UBYTE *gamedata,ULONG gamesize)
 {
+#endif
    int headersize=0
    TRACE_CART1("CCart() called with %s",gamefile);
    LYNX_HEADER	header;
@@ -267,7 +273,7 @@ CCart::CCart(UBYTE *gamedata,ULONG gamesize)
    {
       // As this is a cartridge boot unset the boot address
 
-      gCPUBootAddress=0;
+      SYSTEM_VAR(gCPUBootAddress)=0;
 
       //
       // Check if this is a headerless cart, either 410 (EPYX_HEADER_NEW) or 512 (EPYX_HEADER_OLD) zeros

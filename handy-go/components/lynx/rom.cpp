@@ -116,9 +116,6 @@ CRom::CRom(const char *romfile,bool useEmu)
                      );
       }
    }
-#ifdef MY_DEBUG_OUT
-   printf("%-20s: %ps\n", "rom", &mWriteEnable);
-#endif
 }
 
 CRom::~CRom()

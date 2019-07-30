@@ -21,8 +21,7 @@ C65C02::C65C02(CSystemBase& parent)
          for(int loop=0;loop<MAX_CPU_BREAKPOINTS;loop++)    mPcBreakpoints[loop]=0xfffffff;
          mDbgFlag=0;
 #endif
-     Reset();
-
+    //Reset(); // Moved to system.cpp
   }
 
 C65C02::~C65C02()
@@ -50,10 +49,10 @@ void C65C02::Reset(void)
      mC=FALSE;
      mIRQActive=FALSE;
 
-     gSystemNMI=FALSE;
-     gSystemIRQ=FALSE;
-     gSystemCPUSleep=FALSE;
-     gSystemCPUSleep_Saved=FALSE;
+     SYSTEM_VAR(gSystemNMI)=FALSE;
+     SYSTEM_VAR(gSystemIRQ)=FALSE;
+     SYSTEM_VAR(gSystemCPUSleep)=FALSE;
+     SYSTEM_VAR(gSystemCPUSleep_Saved)=FALSE;
   }
 
 

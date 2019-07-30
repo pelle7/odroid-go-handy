@@ -71,6 +71,21 @@
 
 // ULONG cycles_used=0;
 
+int lss_read_UUWORD(UUWORD* dest, LSS_FILE *fp)
+{
+    int varsize = sizeof(UWORD);
+    int varcount = 1;
+    ULONG copysize;
+    UWORD rc;
+   copysize=varsize*varcount;
+   if((fp->index + copysize) > fp->index_limit) copysize=fp->index_limit - fp->index;
+   memcpy(&rc,fp->memptr+fp->index,copysize);
+   fp->index+=copysize;
+   (*dest).Word = rc;
+   return copysize;
+}
+
+
 CSusie::CSusie(CSystem& parent) :mSystem(parent)
 {
    TRACE_SUSIE0("CSusie()");
@@ -94,8 +109,8 @@ void CSusie::Reset(void)
 
    // Reset ALL variables
 
-   mTMPADR.Word=0;
-   mTILTACUM.Word=0;
+   mTMPADR_.Word=0;
+   mTILTACUM_.Word=0;
    mHOFF.Word=0;
    mVOFF.Word=0;
    mVIDBAS.Word=0;
@@ -103,21 +118,21 @@ void CSusie::Reset(void)
    mVIDADR.Word=0;
    mCOLLADR.Word=0;
    mSCBNEXT.Word=0;
-   mSPRDLINE.Word=0;
-   mHPOSSTRT.Word=0;
+   mSPRDLINE_.Word=0;
+   mHPOSSTRT_.Word=0;
    mVPOSSTRT.Word=0;
-   mSPRHSIZ.Word=0;
-   mSPRVSIZ.Word=0;
-   mSTRETCH.Word=0;
-   mTILT.Word=0;
-   mSPRDOFF.Word=0;
+   mSPRHSIZ_.Word=0;
+   mSPRVSIZ_.Word=0;
+   mSTRETCH_.Word=0;
+   mTILT_.Word=0;
+   mSPRDOFF_.Word=0;
    mSPRVPOS.Word=0;
    mCOLLOFF.Word=0;
    mVSIZACUM.Word=0;
-   mHSIZACUM.Word=0;
+   //mHSIZACUM.Word=0;
    mHSIZOFF.Word=0x007f;
    mVSIZOFF.Word=0x007f;
-   mSCBADR.Word=0;
+   mSCBADR_.Word=0;
    mPROCADR.Word=0;
 
    // Must be initialised to this due to
@@ -132,7 +147,7 @@ void CSusie::Reset(void)
    mMATHCD_sign=1;
    mMATHEFGH_sign=1;
 
-   mSPRCTL0_Type=0;
+   //mSPRCTL0_Type=0;
    mSPRCTL0_Vflip=0;
    mSPRCTL0_Hflip=0;
    mSPRCTL0_PixelBits=0;
@@ -182,9 +197,9 @@ bool CSusie::ContextSave(FILE *fp)
    TRACE_SUSIE0("ContextSave()");
 
    if(!fprintf(fp,"CSusie::ContextSave")) return 0;
-
-   if(!fwrite(&mTMPADR,sizeof(UUWORD),1,fp)) return 0;
-   if(!fwrite(&mTILTACUM,sizeof(UUWORD),1,fp)) return 0;
+   UUWORD tmp_uuword;
+   if(!fwrite(&mTMPADR_,sizeof(UUWORD),1,fp)) return 0;
+   if(!fwrite(&mTILTACUM_,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mHOFF,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mVOFF,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mVIDBAS,sizeof(UUWORD),1,fp)) return 0;
@@ -192,21 +207,21 @@ bool CSusie::ContextSave(FILE *fp)
    if(!fwrite(&mVIDADR,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mCOLLADR,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mSCBNEXT,sizeof(UUWORD),1,fp)) return 0;
-   if(!fwrite(&mSPRDLINE,sizeof(UUWORD),1,fp)) return 0;
-   if(!fwrite(&mHPOSSTRT,sizeof(UUWORD),1,fp)) return 0;
+   if(!fwrite(&mSPRDLINE_,sizeof(UUWORD),1,fp)) return 0;
+   if(!fwrite(&mHPOSSTRT_,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mVPOSSTRT,sizeof(UUWORD),1,fp)) return 0;
-   if(!fwrite(&mSPRHSIZ,sizeof(UUWORD),1,fp)) return 0;
-   if(!fwrite(&mSPRVSIZ,sizeof(UUWORD),1,fp)) return 0;
-   if(!fwrite(&mSTRETCH,sizeof(UUWORD),1,fp)) return 0;
-   if(!fwrite(&mTILT,sizeof(UUWORD),1,fp)) return 0;
-   if(!fwrite(&mSPRDOFF,sizeof(UUWORD),1,fp)) return 0;
+   if(!fwrite(&mSPRHSIZ_,sizeof(UUWORD),1,fp)) return 0;
+   if(!fwrite(&mSPRVSIZ_,sizeof(UUWORD),1,fp)) return 0;
+   if(!fwrite(&mSTRETCH_,sizeof(UUWORD),1,fp)) return 0;
+   if(!fwrite(&mTILT_,sizeof(UUWORD),1,fp)) return 0;
+   if(!fwrite(&mSPRDOFF_,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mSPRVPOS,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mCOLLOFF,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mVSIZACUM,sizeof(UUWORD),1,fp)) return 0;
-   if(!fwrite(&mHSIZACUM,sizeof(UUWORD),1,fp)) return 0;
+   if(!fwrite(&tmp_uuword,sizeof(UUWORD),1,fp)) return 0;//mHSIZACUM
    if(!fwrite(&mHSIZOFF,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mVSIZOFF,sizeof(UUWORD),1,fp)) return 0;
-   if(!fwrite(&mSCBADR,sizeof(UUWORD),1,fp)) return 0;
+   if(!fwrite(&mSCBADR_,sizeof(UUWORD),1,fp)) return 0;
    if(!fwrite(&mPROCADR,sizeof(UUWORD),1,fp)) return 0;
 
    if(!fwrite(&mMATHABCD,sizeof(TMATHABCD),1,fp)) return 0;
@@ -214,7 +229,8 @@ bool CSusie::ContextSave(FILE *fp)
    if(!fwrite(&mMATHJKLM,sizeof(TMATHJKLM),1,fp)) return 0;
    if(!fwrite(&mMATHNP,sizeof(TMATHNP),1,fp)) return 0;
 
-   if(!fwrite(&mSPRCTL0_Type,sizeof(ULONG),1,fp)) return 0;
+   ULONG tmp = 0;
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) return 0;// mSPRCTL0_Type
    if(!fwrite(&mSPRCTL0_Vflip,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mSPRCTL0_Hflip,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mSPRCTL0_PixelBits,sizeof(ULONG),1,fp)) return 0;
@@ -251,13 +267,21 @@ bool CSusie::ContextSave(FILE *fp)
 
    if(!fwrite(mPenIndex,sizeof(UBYTE),16,fp)) return 0;
 
+#ifdef SUSIE_INLINE_LineGetBits_V2
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) return 0;//mLineType
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) return 0;//mLineShiftRegCount
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) return 0;//mLineShiftReg
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) return 0;//mLineRepeatCount
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) return 0;//mLinePixel
+   if(!fwrite(&tmp,sizeof(ULONG),1,fp)) return 0;//mLinePacketBitsLeft
+#else
    if(!fwrite(&mLineType,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mLineShiftRegCount,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mLineShiftReg,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mLineRepeatCount,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mLinePixel,sizeof(ULONG),1,fp)) return 0;
    if(!fwrite(&mLinePacketBitsLeft,sizeof(ULONG),1,fp)) return 0;
-
+#endif
    if(!fwrite(&mCollision,sizeof(ULONG),1,fp)) return 0;
 
    if(!fwrite(&mLineBaseAddress,sizeof(ULONG),1,fp)) return 0;
@@ -276,39 +300,41 @@ bool CSusie::ContextLoad(LSS_FILE *fp)
    char teststr[100]="XXXXXXXXXXXXXXXXXXX";
    if(!lss_read(teststr,sizeof(char),19,fp)) return 0;
    if(strcmp(teststr,"CSusie::ContextSave")!=0) return 0;
+   UUWORD tmp_uuword;
 
-   if(!lss_read(&mTMPADR,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mTILTACUM,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mHOFF,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mVOFF,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mVIDBAS,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mCOLLBAS,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mVIDADR,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mCOLLADR,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mSCBNEXT,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mSPRDLINE,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mHPOSSTRT,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mVPOSSTRT,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mSPRHSIZ,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mSPRVSIZ,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mSTRETCH,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mTILT,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mSPRDOFF,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mSPRVPOS,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mCOLLOFF,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mVSIZACUM,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mHSIZACUM,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mHSIZOFF,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mVSIZOFF,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mSCBADR,sizeof(UUWORD),1,fp)) return 0;
-   if(!lss_read(&mPROCADR,sizeof(UUWORD),1,fp)) return 0;
+   if(!lss_read_UUWORD(&mTMPADR_,fp)) return 0;
+   if(!lss_read_UUWORD(&mTILTACUM_,fp)) return 0;
+   if(!lss_read_UUWORD(&mHOFF,fp)) return 0;
+   if(!lss_read_UUWORD(&mVOFF,fp)) return 0;
+   if(!lss_read_UUWORD(&mVIDBAS,fp)) return 0;
+   if(!lss_read_UUWORD(&mCOLLBAS,fp)) return 0;
+   if(!lss_read_UUWORD(&mVIDADR,fp)) return 0;
+   if(!lss_read_UUWORD(&mCOLLADR,fp)) return 0;
+   if(!lss_read_UUWORD(&mSCBNEXT,fp)) return 0;
+   if(!lss_read_UUWORD(&mSPRDLINE_,fp)) return 0;
+   if(!lss_read_UUWORD(&mHPOSSTRT_,fp)) return 0;
+   if(!lss_read_UUWORD(&mVPOSSTRT,fp)) return 0;
+   if(!lss_read_UUWORD(&mSPRHSIZ_,fp)) return 0;
+   if(!lss_read_UUWORD(&mSPRVSIZ_,fp)) return 0;
+   if(!lss_read_UUWORD(&mSTRETCH_,fp)) return 0;
+   if(!lss_read_UUWORD(&mTILT_,fp)) return 0;
+   if(!lss_read_UUWORD(&mSPRDOFF_,fp)) return 0;
+   if(!lss_read_UUWORD(&mSPRVPOS,fp)) return 0;
+   if(!lss_read_UUWORD(&mCOLLOFF,fp)) return 0;
+   if(!lss_read_UUWORD(&mVSIZACUM,fp)) return 0;
+   if(!lss_read_UUWORD(&tmp_uuword,fp)) return 0;// mHSIZACUM
+   if(!lss_read_UUWORD(&mHSIZOFF,fp)) return 0;
+   if(!lss_read_UUWORD(&mVSIZOFF,fp)) return 0;
+   if(!lss_read_UUWORD(&mSCBADR_,fp)) return 0;
+   if(!lss_read_UUWORD(&mPROCADR,fp)) return 0;
 
    if(!lss_read(&mMATHABCD,sizeof(TMATHABCD),1,fp)) return 0;
    if(!lss_read(&mMATHEFGH,sizeof(TMATHEFGH),1,fp)) return 0;
    if(!lss_read(&mMATHJKLM,sizeof(TMATHJKLM),1,fp)) return 0;
    if(!lss_read(&mMATHNP,sizeof(TMATHNP),1,fp)) return 0;
 
-   if(!lss_read(&mSPRCTL0_Type,sizeof(ULONG),1,fp)) return 0;
+   ULONG tmp;
+   if(!lss_read(&tmp,sizeof(ULONG),1,fp)) return 0; // mSPRCTL0_Type
    if(!lss_read(&mSPRCTL0_Vflip,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mSPRCTL0_Hflip,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mSPRCTL0_PixelBits,sizeof(ULONG),1,fp)) return 0;
@@ -342,15 +368,36 @@ bool CSusie::ContextLoad(LSS_FILE *fp)
 
    if(!lss_read(&mSPRGO,sizeof(ULONG),1,fp)) return 0;
    if(!lss_read(&mEVERON,sizeof(ULONG),1,fp)) return 0;
+   
+   UBYTE tmp_array[16];
+   if(!lss_read(tmp_array,sizeof(UBYTE),16,fp)) return 0;
+   for (int i = 0;i <16;i++)
+        mPenIndex[i] = tmp_array[i];
 
-   if(!lss_read(mPenIndex,sizeof(UBYTE),16,fp)) return 0;
-
-   if(!lss_read(&mLineType,sizeof(ULONG),1,fp)) return 0;
-   if(!lss_read(&mLineShiftRegCount,sizeof(ULONG),1,fp)) return 0;
-   if(!lss_read(&mLineShiftReg,sizeof(ULONG),1,fp)) return 0;
-   if(!lss_read(&mLineRepeatCount,sizeof(ULONG),1,fp)) return 0;
-   if(!lss_read(&mLinePixel,sizeof(ULONG),1,fp)) return 0;
-   if(!lss_read(&mLinePacketBitsLeft,sizeof(ULONG),1,fp)) return 0;
+   if(!lss_read(&tmp,sizeof(ULONG),1,fp)) return 0;
+#ifndef SUSIE_INLINE_LineGetBits_V2
+   mLineType = tmp;
+#endif
+   if(!lss_read(&tmp,sizeof(ULONG),1,fp)) return 0;
+#ifndef SUSIE_INLINE_LineGetBits_V2
+   mLineShiftRegCount = tmp;
+#endif
+   if(!lss_read(&tmp,sizeof(ULONG),1,fp)) return 0;
+#ifndef SUSIE_INLINE_LineGetBits_V2
+   mLineShiftReg = tmp;
+#endif
+   if(!lss_read(&tmp,sizeof(ULONG),1,fp)) return 0;
+#ifndef SUSIE_INLINE_LineGetBits_V2
+   mLineRepeatCount = tmp;
+#endif
+   if(!lss_read(&tmp,sizeof(ULONG),1,fp)) return 0;
+#ifndef SUSIE_INLINE_LineGetBits_V2
+   mLinePixel = tmp;
+#endif
+   if(!lss_read(&tmp,sizeof(ULONG),1,fp)) return 0;
+#ifndef SUSIE_INLINE_LineGetBits_V2
+   mLinePacketBitsLeft = tmp;
+#endif
 
    if(!lss_read(&mCollision,sizeof(ULONG),1,fp)) return 0;
 
@@ -378,28 +425,30 @@ inline void CSusie::DoMathDivide(void)
 #endif
 
 #ifndef SUSIE_INLINE_PaintSprites
-ULONG CSusie::PaintSprites(void)
+ULONG MY_SLOW CSusie::PaintSprites(void)
 {
     #include "susie_paintsprites.h"
 }
 #endif
 
+#ifndef MY_SUSIE_PIXEL_HLOOP
 #ifndef SUSIE_INLINE_PROCESSPIXEL
-void CSusie::ProcessPixel(ULONG hoff,ULONG pixel)
+void MY_SLOW CSusie::ProcessPixel(ULONG hoff,ULONG pixel)
 {
     #include "susie_processpixel.h"
 }
 #endif
+#endif
 
 #ifndef SUSIE_INLINE_WRITEPIXEL
- void CSusie::WritePixel(ULONG hoff,ULONG pixel)
+ void MY_SLOW CSusie::WritePixel(ULONG hoff,ULONG pixel)
 {
    #include "susie_writepixel.h"
 }
 #endif
 
 #ifndef SUSIE_INLINE_READPIXEL
- ULONG CSusie::ReadPixel(ULONG hoff)
+ ULONG MY_SLOW CSusie::ReadPixel(ULONG hoff)
 {
    #include "susie_readpixel.h"
 }
@@ -407,14 +456,14 @@ void CSusie::ProcessPixel(ULONG hoff,ULONG pixel)
 
 
 #ifndef SUSIE_INLINE_WRITECOLLISION
- void CSusie::WriteCollision(ULONG hoff,ULONG pixel)
+ void MY_SLOW CSusie::WriteCollision(ULONG hoff,ULONG pixel)
 {
     #include "susie_writecollision.h"
 }
 #endif
 
 #ifndef SUSIE_INLINE_READCOLLISION
- ULONG CSusie::ReadCollision(ULONG hoff)
+ ULONG MY_SLOW CSusie::ReadCollision(ULONG hoff)
 {
     #include "susie_readcollision.h"
 }
@@ -428,18 +477,22 @@ void CSusie::ProcessPixel(ULONG hoff,ULONG pixel)
 }
 #endif
 
+#ifndef MY_SUSIE_PIXEL_HLOOP
 #ifndef SUSIE_INLINE_LineGetPixel
  ULONG CSusie::LineGetPixel()
 {
     #include "susie_LineGetPixel.h"
 }
 #endif
+#endif
 
+#ifndef SUSIE_INLINE_LineGetBits_V2
 #ifndef SUSIE_INLINE_LineGetBits
  ULONG CSusie::LineGetBits(ULONG bits)
 {
     #include "susie_LineGetBits.h"
 }
+#endif
 #endif
 
 // without IRAM_ATTR better
@@ -448,21 +501,21 @@ void CSusie::Poke(ULONG addr,UBYTE data)
    switch(addr&0xff)
    {
       case (TMPADRL&0xff):
-         mTMPADR.Byte.Low=data;
-         mTMPADR.Byte.High=0;
+         mTMPADR_.Byte.Low=data;
+         mTMPADR_.Byte.High=0;
          TRACE_SUSIE2("Poke(TMPADRL,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (TMPADRH&0xff):
-         mTMPADR.Byte.High=data;
+         mTMPADR_.Byte.High=data;
          TRACE_SUSIE2("Poke(TMPADRH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (TILTACUML&0xff):
-         mTILTACUM.Byte.Low=data;
-         mTILTACUM.Byte.High=0;
+         mTILTACUM_.Byte.Low=data;
+         mTILTACUM_.Byte.High=0;
          TRACE_SUSIE2("Poke(TILTACUML,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (TILTACUMH&0xff):
-         mTILTACUM.Byte.High=data;
+         mTILTACUM_.Byte.High=data;
          TRACE_SUSIE2("Poke(TILTACUMH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (HOFFL&0xff):
@@ -529,21 +582,21 @@ void CSusie::Poke(ULONG addr,UBYTE data)
          TRACE_SUSIE2("Poke(SCBNEXTH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (SPRDLINEL&0xff):
-         mSPRDLINE.Byte.Low=data;
-         mSPRDLINE.Byte.High=0;
+         mSPRDLINE_.Byte.Low=data;
+         mSPRDLINE_.Byte.High=0;
          TRACE_SUSIE2("Poke(SPRDLINEL,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (SPRDLINEH&0xff):
-         mSPRDLINE.Byte.High=data;
+         mSPRDLINE_.Byte.High=data;
          TRACE_SUSIE2("Poke(SPRDLINEH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (HPOSSTRTL&0xff):
-         mHPOSSTRT.Byte.Low=data;
-         mHPOSSTRT.Byte.High=0;
+         mHPOSSTRT_.Byte.Low=data;
+         mHPOSSTRT_.Byte.High=0;
          TRACE_SUSIE2("Poke(HPOSSTRTL,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (HPOSSTRTH&0xff):
-         mHPOSSTRT.Byte.High=data;
+         mHPOSSTRT_.Byte.High=data;
          TRACE_SUSIE2("Poke(HPOSSTRTH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (VPOSSTRTL&0xff):
@@ -556,49 +609,49 @@ void CSusie::Poke(ULONG addr,UBYTE data)
          TRACE_SUSIE2("Poke(VPOSSTRTH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (SPRHSIZL&0xff):
-         mSPRHSIZ.Byte.Low=data;
-         mSPRHSIZ.Byte.High=0;
+         mSPRHSIZ_.Byte.Low=data;
+         mSPRHSIZ_.Byte.High=0;
          TRACE_SUSIE2("Poke(SPRHSIZL,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (SPRHSIZH&0xff):
-         mSPRHSIZ.Byte.High=data;
+         mSPRHSIZ_.Byte.High=data;
          TRACE_SUSIE2("Poke(SPRHSIZH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (SPRVSIZL&0xff):
-         mSPRVSIZ.Byte.Low=data;
-         mSPRVSIZ.Byte.High=0;
+         mSPRVSIZ_.Byte.Low=data;
+         mSPRVSIZ_.Byte.High=0;
          TRACE_SUSIE2("Poke(SPRVSIZL,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (SPRVSIZH&0xff):
-         mSPRVSIZ.Byte.High=data;
+         mSPRVSIZ_.Byte.High=data;
          TRACE_SUSIE2("Poke(SPRVSIZH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (STRETCHL&0xff):
-         mSTRETCH.Byte.Low=data;
-         mSTRETCH.Byte.High=0;
+         mSTRETCH_.Byte.Low=data;
+         mSTRETCH_.Byte.High=0;
          TRACE_SUSIE2("Poke(STRETCHL,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (STRETCHH&0xff):
          TRACE_SUSIE2("Poke(STRETCHH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
-         mSTRETCH.Byte.High=data;
+         mSTRETCH_.Byte.High=data;
          break;
       case (TILTL&0xff):
-         mTILT.Byte.Low=data;
-         mTILT.Byte.High=0;
+         mTILT_.Byte.Low=data;
+         mTILT_.Byte.High=0;
          TRACE_SUSIE2("Poke(TILTL,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (TILTH&0xff):
-         mTILT.Byte.High=data;
+         mTILT_.Byte.High=data;
          TRACE_SUSIE2("Poke(TILTH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (SPRDOFFL&0xff):
          TRACE_SUSIE2("Poke(SPRDOFFL,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
-         mSPRDOFF.Byte.Low=data;
-         mSPRDOFF.Byte.High=0;
+         mSPRDOFF_.Byte.Low=data;
+         mSPRDOFF_.Byte.High=0;
          break;
       case (SPRDOFFH&0xff):
          TRACE_SUSIE2("Poke(SPRDOFFH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
-         mSPRDOFF.Byte.High=data;
+         mSPRDOFF_.Byte.High=data;
          break;
       case (SPRVPOSL&0xff):
          TRACE_SUSIE2("Poke(SPRVPOSL,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
@@ -646,12 +699,12 @@ void CSusie::Poke(ULONG addr,UBYTE data)
          TRACE_SUSIE2("Poke(VSIZOFFH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (SCBADRL&0xff):
-         mSCBADR.Byte.Low=data;
-         mSCBADR.Byte.High=0;
+         mSCBADR_.Byte.Low=data;
+         mSCBADR_.Byte.High=0;
          TRACE_SUSIE2("Poke(SCBADRL,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (SCBADRH&0xff):
-         mSCBADR.Byte.High=data;
+         mSCBADR_.Byte.High=data;
          TRACE_SUSIE2("Poke(SCBADRH,%02x) at PC=$%04x",data,mSystem.mCpu->GetPC());
          break;
       case (PROCADRL&0xff):
@@ -776,7 +829,7 @@ void CSusie::Poke(ULONG addr,UBYTE data)
          break;
 
       case (SPRCTL0&0xff):
-         mSPRCTL0_Type=data&0x0007;
+         // mSPRCTL0_Type=data&0x0007;
          mSPRCTL0_Vflip=data&0x0010;
          mSPRCTL0_Hflip=data&0x0020;
          mSPRCTL0_PixelBits=((data&0x00c0)>>6)+1;
@@ -874,19 +927,19 @@ UBYTE CSusie::Peek(ULONG addr)
    switch(addr&0xff)
    {
       case (TMPADRL&0xff):
-         retval=mTMPADR.Byte.Low;
+         retval=mTMPADR_.Byte.Low;
          TRACE_SUSIE2("Peek(TMPADRL)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (TMPADRH&0xff):
-         retval=mTMPADR.Byte.High;
+         retval=mTMPADR_.Byte.High;
          TRACE_SUSIE2("Peek(TMPADRH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (TILTACUML&0xff):
-         retval=mTILTACUM.Byte.Low;
+         retval=mTILTACUM_.Byte.Low;
          TRACE_SUSIE2("Peek(TILTACUML)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (TILTACUMH&0xff):
-         retval=mTILTACUM.Byte.High;
+         retval=mTILTACUM_.Byte.High;
          TRACE_SUSIE2("Peek(TILTACUMH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (HOFFL&0xff):
@@ -946,19 +999,19 @@ UBYTE CSusie::Peek(ULONG addr)
          TRACE_SUSIE2("Peek(SCBNEXTH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SPRDLINEL&0xff):
-         retval=mSPRDLINE.Byte.Low;
+         retval=mSPRDLINE_.Byte.Low;
          TRACE_SUSIE2("Peek(SPRDLINEL)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SPRDLINEH&0xff):
-         retval=mSPRDLINE.Byte.High;
+         retval=mSPRDLINE_.Byte.High;
          TRACE_SUSIE2("Peek(SPRDLINEH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (HPOSSTRTL&0xff):
-         retval=mHPOSSTRT.Byte.Low;
+         retval=mHPOSSTRT_.Byte.Low;
          TRACE_SUSIE2("Peek(HPOSSTRTL)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (HPOSSTRTH&0xff):
-         retval=mHPOSSTRT.Byte.High;
+         retval=mHPOSSTRT_.Byte.High;
          TRACE_SUSIE2("Peek(HPOSSTRTH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (VPOSSTRTL&0xff):
@@ -970,43 +1023,43 @@ UBYTE CSusie::Peek(ULONG addr)
          TRACE_SUSIE2("Peek(VPOSSTRTH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SPRHSIZL&0xff):
-         retval=mSPRHSIZ.Byte.Low;
+         retval=mSPRHSIZ_.Byte.Low;
          TRACE_SUSIE2("Peek(SPRHSIZL)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SPRHSIZH&0xff):
-         retval=mSPRHSIZ.Byte.High;
+         retval=mSPRHSIZ_.Byte.High;
          TRACE_SUSIE2("Peek(SPRHSIZH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SPRVSIZL&0xff):
-         retval=mSPRVSIZ.Byte.Low;
+         retval=mSPRVSIZ_.Byte.Low;
          TRACE_SUSIE2("Peek(SPRVSIZL)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SPRVSIZH&0xff):
-         retval=mSPRVSIZ.Byte.High;
+         retval=mSPRVSIZ_.Byte.High;
          TRACE_SUSIE2("Peek(SPRVSIZH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (STRETCHL&0xff):
-         retval=mSTRETCH.Byte.Low;
+         retval=mSTRETCH_.Byte.Low;
          TRACE_SUSIE2("Peek(STRETCHL)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (STRETCHH&0xff):
-         retval=mSTRETCH.Byte.High;
+         retval=mSTRETCH_.Byte.High;
          TRACE_SUSIE2("Peek(STRETCHH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (TILTL&0xff):
-         retval=mTILT.Byte.Low;
+         retval=mTILT_.Byte.Low;
          TRACE_SUSIE2("Peek(TILTL)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (TILTH&0xff):
-         retval=mTILT.Byte.High;
+         retval=mTILT_.Byte.High;
          TRACE_SUSIE2("Peek(TILTH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SPRDOFFL&0xff):
-         retval=mSPRDOFF.Byte.Low;
+         retval=mSPRDOFF_.Byte.Low;
          TRACE_SUSIE2("Peek(SPRDOFFL)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SPRDOFFH&0xff):
-         retval=mSPRDOFF.Byte.High;
+         retval=mSPRDOFF_.Byte.High;
          TRACE_SUSIE2("Peek(SPRDOFFH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SPRVPOSL&0xff):
@@ -1050,11 +1103,11 @@ UBYTE CSusie::Peek(ULONG addr)
          TRACE_SUSIE2("Peek(VSIZOFFH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SCBADRL&0xff):
-         retval=mSCBADR.Byte.Low;
+         retval=mSCBADR_.Byte.Low;
          TRACE_SUSIE2("Peek(SCBADRL)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (SCBADRH&0xff):
-         retval=mSCBADR.Byte.High;
+         retval=mSCBADR_.Byte.High;
          TRACE_SUSIE2("Peek(SCBADRH)=$%02x at PC=$%04x",retval,mSystem.mCpu->GetPC());
          return retval;
       case (PROCADRL&0xff):
@@ -1133,7 +1186,7 @@ UBYTE CSusie::Peek(ULONG addr)
          //	retval+=(mSPRSYS_Status)?0x0001:0x0000;
          // Use gSystemCPUSleep to signal the status instead, if we are asleep then
          // we must be rendering sprites
-         retval+=(gSystemCPUSleep)?0x0001:0x0000;
+         retval+=(SYSTEM_VAR(gSystemCPUSleep))?0x0001:0x0000;
          retval+=(mSPRSYS_StopOnCurrent)?0x0002:0x0000;
          retval+=(mSPRSYS_UnsafeAccess)?0x0004:0x0000;
          retval+=(mSPRSYS_LeftHand)?0x0008:0x0000;

@@ -19,7 +19,7 @@ ULONG tmp;
                   // Ordinary clocked mode as opposed to linked mode
                   // 16MHz clock downto 1us == cyclecount >> 4
                   divide=(4+mAUDIO_0_LINKING);
-                  decval=(gSystemCycleCount-mAUDIO_0_LAST_COUNT)>>divide;
+                  decval=(SYSTEM_VAR(gSystemCycleCount)-mAUDIO_0_LAST_COUNT)>>divide;
                }
 
                if(decval)
@@ -85,11 +85,11 @@ ULONG tmp;
                   // then CURRENT may still be negative and we can use it to
                   // calc the next timer value, we just want another update ASAP
                   tmp=(mAUDIO_0_CURRENT&0x80000000)?1:((mAUDIO_0_CURRENT+1)<<divide);
-                  tmp+=gSystemCycleCount;
-                  if(tmp<gNextTimerEvent)
+                  tmp+=SYSTEM_VAR(gSystemCycleCount);
+                  if(tmp<SYSTEM_VAR(gNextTimerEvent))
                   {
-                     gNextTimerEvent=tmp;
-                     TRACE_MIKIE1("Update() - AUDIO 0 Set NextTimerEvent = %012d",gNextTimerEvent);
+                     SYSTEM_VAR(gNextTimerEvent)=tmp;
+                     TRACE_MIKIE1("Update() - AUDIO 0 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
                   }
                }
                //                   TRACE_MIKIE1("Update() - mAUDIO_0_CURRENT = %012d",mAUDIO_0_CURRENT);
@@ -116,7 +116,7 @@ ULONG tmp;
                   // Ordinary clocked mode as opposed to linked mode
                   // 16MHz clock downto 1us == cyclecount >> 4
                   divide=(4+mAUDIO_1_LINKING);
-                  decval=(gSystemCycleCount-mAUDIO_1_LAST_COUNT)>>divide;
+                  decval=(SYSTEM_VAR(gSystemCycleCount)-mAUDIO_1_LAST_COUNT)>>divide;
                }
 
                if(decval)
@@ -182,11 +182,11 @@ ULONG tmp;
                   // then CURRENT may still be negative and we can use it to
                   // calc the next timer value, we just want another update ASAP
                   tmp=(mAUDIO_1_CURRENT&0x80000000)?1:((mAUDIO_1_CURRENT+1)<<divide);
-                  tmp+=gSystemCycleCount;
-                  if(tmp<gNextTimerEvent)
+                  tmp+=SYSTEM_VAR(gSystemCycleCount);
+                  if(tmp<SYSTEM_VAR(gNextTimerEvent))
                   {
-                     gNextTimerEvent=tmp;
-                     TRACE_MIKIE1("Update() - AUDIO 1 Set NextTimerEvent = %012d",gNextTimerEvent);
+                     SYSTEM_VAR(gNextTimerEvent)=tmp;
+                     TRACE_MIKIE1("Update() - AUDIO 1 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
                   }
                }
                //                   TRACE_MIKIE1("Update() - mAUDIO_1_CURRENT = %012d",mAUDIO_1_CURRENT);
@@ -213,7 +213,7 @@ ULONG tmp;
                   // Ordinary clocked mode as opposed to linked mode
                   // 16MHz clock downto 1us == cyclecount >> 4
                   divide=(4+mAUDIO_2_LINKING);
-                  decval=(gSystemCycleCount-mAUDIO_2_LAST_COUNT)>>divide;
+                  decval=(SYSTEM_VAR(gSystemCycleCount)-mAUDIO_2_LAST_COUNT)>>divide;
                }
 
                if(decval)
@@ -279,11 +279,11 @@ ULONG tmp;
                   // then CURRENT may still be negative and we can use it to
                   // calc the next timer value, we just want another update ASAP
                   tmp=(mAUDIO_2_CURRENT&0x80000000)?1:((mAUDIO_2_CURRENT+1)<<divide);
-                  tmp+=gSystemCycleCount;
-                  if(tmp<gNextTimerEvent)
+                  tmp+=SYSTEM_VAR(gSystemCycleCount);
+                  if(tmp<SYSTEM_VAR(gNextTimerEvent))
                   {
-                     gNextTimerEvent=tmp;
-                     TRACE_MIKIE1("Update() - AUDIO 2 Set NextTimerEvent = %012d",gNextTimerEvent);
+                     SYSTEM_VAR(gNextTimerEvent)=tmp;
+                     TRACE_MIKIE1("Update() - AUDIO 2 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
                   }
                }
                //                   TRACE_MIKIE1("Update() - mAUDIO_2_CURRENT = %012d",mAUDIO_2_CURRENT);
@@ -310,7 +310,7 @@ ULONG tmp;
                   // Ordinary clocked mode as opposed to linked mode
                   // 16MHz clock downto 1us == cyclecount >> 4
                   divide=(4+mAUDIO_3_LINKING);
-                  decval=(gSystemCycleCount-mAUDIO_3_LAST_COUNT)>>divide;
+                  decval=(SYSTEM_VAR(gSystemCycleCount)-mAUDIO_3_LAST_COUNT)>>divide;
                }
 
                if(decval)
@@ -376,11 +376,11 @@ ULONG tmp;
                   // then CURRENT may still be negative and we can use it to
                   // calc the next timer value, we just want another update ASAP
                   tmp=(mAUDIO_3_CURRENT&0x80000000)?1:((mAUDIO_3_CURRENT+1)<<divide);
-                  tmp+=gSystemCycleCount;
-                  if(tmp<gNextTimerEvent)
+                  tmp+=SYSTEM_VAR(gSystemCycleCount);
+                  if(tmp<SYSTEM_VAR(gNextTimerEvent))
                   {
-                     gNextTimerEvent=tmp;
-                     TRACE_MIKIE1("Update() - AUDIO 3 Set NextTimerEvent = %012d",gNextTimerEvent);
+                     SYSTEM_VAR(gNextTimerEvent)=tmp;
+                     TRACE_MIKIE1("Update() - AUDIO 3 Set NextTimerEvent = %012d",SYSTEM_VAR(gNextTimerEvent));
                   }
                }
                //                   TRACE_MIKIE1("Update() - mAUDIO_3_CURRENT = %012d",mAUDIO_3_CURRENT);

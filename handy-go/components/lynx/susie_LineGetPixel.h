@@ -1,3 +1,4 @@
+   ODROID_DEBUG_PERF_START()
    if(!mLineRepeatCount)
    {
       // Normal sprites fetch their counts on a packet basis
@@ -13,6 +14,7 @@
          case line_abs_literal:
             // This means end of line for us
             mLinePixel=LINE_END;
+            ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_SUSIE_LINEGETPIXEL)
             return mLinePixel;      // SPEEDUP
          case line_literal:
             mLineRepeatCount=LineGetBits(4);
@@ -25,12 +27,18 @@
             //
             mLineRepeatCount=LineGetBits(4);
             if(!mLineRepeatCount)
+            {
                mLinePixel=LINE_END;
+               mLineRepeatCount++;
+               ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_SUSIE_LINEGETPIXEL)
+               return mLinePixel;
+            }
             else
                mLinePixel=mPenIndex[LineGetBits(mSPRCTL0_PixelBits)];
             mLineRepeatCount++;
             break;
          default:
+            ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_SUSIE_LINEGETPIXEL)
             return 0;
       }
 
@@ -56,8 +64,9 @@
          case line_packed:
             break;
          default:
+            ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_SUSIE_LINEGETPIXEL)
             return 0;
       }
    }
-
+   ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_SUSIE_LINEGETPIXEL)
    return mLinePixel;

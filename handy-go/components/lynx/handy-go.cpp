@@ -43,8 +43,8 @@ VAR_S unsigned char *snd_buffer16s;
 //VAR_S unsigned short *soundBuffer; //soundBuffer[4096 * 8];
 
 VAR_S uint8_t lynx_rot = MIKIE_NO_ROTATE;
-VAR_S uint8_t lynx_width = 160;
-VAR_S uint8_t lynx_height = 102;
+#define lynx_width 160
+#define lynx_height 102
 
 #ifdef MY_VIDEO_MODE_V1
 #define VIDEO_CORE_PIXELSIZE    2 // MIKIE_PIXEL_FORMAT_16BPP_565
@@ -62,6 +62,10 @@ uint8_t current_framebuffer = 0;
 
 VAR_S bool newFrame = false;
 VAR_S bool initialized = false;
+
+#ifdef MY_GLOBAL_SYSTEM_VARS_CPU
+#define gSystemVars lynx->gSystemVars
+#endif
 
 struct map { unsigned retro; unsigned lynx; };
 
@@ -103,15 +107,6 @@ VAR_S map btn_map_rot_90[] = {
 
 VAR_S map* btn_map;
 
-#ifdef MY_DEBUG_OUT
-int my_debug_count;
-int mikie_susie_paint;
-int mikie_poke;
-int mikie_peek;
-int cpu_update;
-int cpu_calls[256];
-#endif
-
 unsigned retro_api_version(void)
 {
    return RETRO_API_VERSION;
@@ -124,14 +119,6 @@ void my_test(void)
 
 void retro_init(void)
 {
-#ifdef MY_DEBUG_OUT
- mikie_susie_paint = 0;
- my_debug_count = 0;
- mikie_poke = 0;
- mikie_peek = 0;
- cpu_update = 0;
- memset(cpu_calls,0, 256 * 4);
-#endif
    printf("retro_init: start\n");
    struct retro_log_callback log;
    printf("retro_init: 001\n");
@@ -245,9 +232,9 @@ FUNC_S void lynx_input(void)
 
 FUNC_S bool lynx_initialize_sound(void)
 {
-   gAudioEnabled = true;
-   //gAudioEnabled = false;
-   snd_buffer16s = (unsigned char *) (&gAudioBuffer);
+   *gAudioEnabledPointer = true;
+   //*gAudioEnabledPointer = false;
+   snd_buffer16s = (unsigned char *) SYSTEM_VAR(gAudioBuffer);
    //soundBuffer = MY_MEM_ALLOC_SLOW(unsigned short, 4096 * 8);
    /*soundBuffer = MY_MEM_ALLOC_FAST(unsigned short, AUDIO_BUFFER_SIZE);
    if (!soundBuffer) {
@@ -291,54 +278,31 @@ FUNC_S UBYTE* lynx_display_callback(ULONG objref)
    if(!initialized)
       return (UBYTE*)framebuffer[0];
 
-   video_cb(framebuffer[current_framebuffer], lynx_width, lynx_height, 160*VIDEO_CORE_PIXELSIZE);
+   video_cb(framebuffer[current_framebuffer]/*, lynx_width, lynx_height, 160*VIDEO_CORE_PIXELSIZE*/);
    current_framebuffer = current_framebuffer ? 0 : 1;
 
-   if(gAudioBufferPointer > 0)
+   if(MIKIE_AUDIO_POINTER_EXT > 0)
    {
 #ifdef MY_AUDIO_MODE_V1
     int f = gAudioBufferPointer / 4; // /1 - 8 bit mono, /2 8 bit stereo, /4 16 bit stereo
     audio_batch_cb((const int16_t*)snd_buffer16s, f);
     gAudioBufferPointer2 = gAudioBuffer;
 #else
-      int f = gAudioBufferPointer / 4; // /1 - 8 bit mono, /2 8 bit stereo, /4 16 bit stereo
-      if (gAudioBufferPointer > AUDIO_BUFFER_SIZE) {
-        printf("AUDIO buffer too small! %u vs %u\n", AUDIO_BUFFER_SIZE, gAudioBufferPointer);
-        gAudioBufferPointer = AUDIO_BUFFER_SIZE;
-        f = gAudioBufferPointer / 4;
+      int f = MIKIE_AUDIO_POINTER_EXT / 4; // /1 - 8 bit mono, /2 8 bit stereo, /4 16 bit stereo
+      if (MIKIE_AUDIO_POINTER_EXT > AUDIO_BUFFER_SIZE) {
+        printf("AUDIO buffer too small! %u vs %u\n", AUDIO_BUFFER_SIZE, MIKIE_AUDIO_POINTER_EXT);
+        MIKIE_AUDIO_POINTER_EXT = AUDIO_BUFFER_SIZE;
+        f = MIKIE_AUDIO_POINTER_EXT / 4;
        }
        audio_batch_cb((const int16_t*)snd_buffer16s, f);
 #endif
-       gAudioBufferPointer = 0;
+       MIKIE_AUDIO_POINTER_EXT = 0;
    }
 #ifndef MY_RETRO_LOOP
    newFrame = true;
 #endif
 #ifdef MY_KEYS_IN_VIDEO
    lynx_input();
-
-#ifdef MY_DEBUG_OUT
-   if (my_debug_count++>60)
-   {
-   my_debug_count = 0;
-   printf("Debug: mikie_susie_paint=%d, mikie_poke=%d, mikie_peek=%d, cpu=%d\n", mikie_susie_paint, mikie_poke, mikie_peek, cpu_update);
-   for (int i = 0; i<16;i++)
-   {
-    int offset = i*16;
-    printf("0x%02X %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d %8d\n",
-      offset, cpu_calls[offset+0], cpu_calls[offset+1], cpu_calls[offset+2], cpu_calls[offset+3],
-      cpu_calls[offset+4], cpu_calls[offset+5], cpu_calls[offset+6], cpu_calls[offset+7],
-      cpu_calls[offset+8], cpu_calls[offset+9], cpu_calls[offset+10], cpu_calls[offset+11],
-      cpu_calls[offset+12], cpu_calls[offset+13], cpu_calls[offset+14], cpu_calls[offset+15]
-    );
-   }
-   mikie_susie_paint = 0;
-   mikie_poke = 0;
-    mikie_peek = 0;
-    cpu_update = 0;
-    memset(cpu_calls,0, 256 * 4);
-   }
-#endif
 #endif
    return (UBYTE*)framebuffer[current_framebuffer];
 }
@@ -370,6 +334,7 @@ FUNC_S void my_setbutton_mapping(unsigned char id)
 
 FUNC_S void check_variables(void)
 {
+#if 0
    struct retro_variable var = {0};
 
    var.key = "handy_rot";
@@ -412,6 +377,7 @@ FUNC_S void check_variables(void)
          update_geometry();
       }
    }
+#endif
 }
 
 FUNC_S bool lynx_initialize_system(const char* gamepath)
@@ -481,15 +447,20 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 
 void retro_run_endless(void)
 {
+#ifdef MY_KEYS_IN_VIDEO
+    lynx->UpdateEndless();
+#else
+   CSystem *l = lynx;
    while (true) {
-      lynx->Update();
-#ifndef MY_KEYS_IN_VIDEO
+      ODROID_DEBUG_PERF_START()
+      l->Update();
+      ODROID_DEBUG_PERF_INCR(ODROID_DEBUG_PERF_TOTAL)
       if (newFrame) {
          lynx_input();
          newFrame = false;
       }
-#endif
    }
+#endif
 }
 
 void retro_run(void)
