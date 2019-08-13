@@ -612,13 +612,39 @@ size_t retro_get_memory_size(unsigned type)
 extern "C" {
 #endif
 
+extern bool scaling_enabled;
+extern int8_t filtering;
+extern uint8_t rotate;
+extern uint8_t frameskip;
+
 bool QuickSaveState(FILE* f)
 {
+    {
+        uint8_t buf[8];
+        memset(buf, 0, 8);
+        buf[0] = (*gAudioEnabledPointer)&0xff;
+        buf[1] = scaling_enabled&0xff;
+        buf[2] = filtering&0xff;
+        buf[3] = rotate&0xff;
+        buf[4] = frameskip;
+        fwrite(buf,sizeof(uint8_t),8,f);
+    }
     return lynx->ContextSave(f);
 }
 
 bool QuickLoadState(FILE* f)
 {
+    {
+        uint8_t buf[8];
+        memset(buf, 0, 8);
+        fread(buf,sizeof(uint8_t),8,f);
+        *gAudioEnabledPointer = buf[0];
+        scaling_enabled = buf[1];
+        filtering = buf[2];
+        rotate = buf[3];
+        frameskip = buf[4];
+        if (frameskip == 0) frameskip = 2;
+    }
     return lynx->ContextLoad(f);
 }
 

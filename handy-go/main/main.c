@@ -24,6 +24,7 @@ typedef unsigned long int uint32;
 #include "../components/odroid/odroid_display.h"
 #include "../components/odroid/odroid_sdcard.h"
 #include "../components/odroid/odroid_ui.h"
+#include "../components/odroid/odroid_ui_choosefile.h"
 
 #include <dirent.h>
 #include <stdarg.h>
@@ -292,41 +293,6 @@ char unalChar(const unsigned char *adr) {
     return 0;
 }
 
-NOINLINE void PowerDown()
-{
-    uint16_t* param = TASK_BREAK;
-    void *exitAudioTask = NULL;
-
-    // Clear audio to prevent studdering
-    printf("PowerDown: stopping audio.\n");
-#ifdef MY_AUDIO_MODE_V1
-    xQueueSend(audioQueue, &exitAudioTask, portMAX_DELAY);
-    while (AudioTaskIsRunning) {}
-#else
-    odroid_audio_terminate();
-#endif
-
-    // Stop tasks
-    printf("PowerDown: stopping tasks.\n");
-
-    xQueueSend(vidQueue, &param, portMAX_DELAY);
-    while (videoTaskIsRunning) { vTaskDelay(1); }
-
-
-    // state
-    printf("PowerDown: Saving state.\n");
-    SaveState();
-
-    // LCD
-    printf("PowerDown: Powerdown LCD panel.\n");
-    ili9341_poweroff();
-
-    odroid_system_sleep();
-
-    // Should never reach here
-    abort();
-}
-
 NOINLINE void DoMenuHome(bool save)
 {
     uint16_t* param = TASK_BREAK;
@@ -347,40 +313,9 @@ NOINLINE void DoMenuHome(bool save)
     xQueueSend(vidQueue, &param, portMAX_DELAY);
     while (videoTaskIsRunning) { vTaskDelay(1); }
 
-    odroid_gamepad_state joystick;   
-    odroid_input_gamepad_read(&joystick);
-#if 0
-    if (!joystick.values[ODROID_INPUT_START] && !save)
-    {
-       save = odroid_ui_ask_v2(" Save current state?", color_selected, COLOR_RGB(1,2,5), 0)==0;
-    }
-#endif
-    odroid_display_show_hourglass();
-
-    if (save) gpio_set_level(GPIO_NUM_2, 1);
-
-    // state
-    printf("PowerDown: Saving state.\n");
-    if (!joystick.values[ODROID_INPUT_START] && save) {
-       SaveState();
-    }
-#ifdef MY_LYNX_INTERNAL_GAME_SELECT
-  odroid_settings_ForceInternalGameSelect_set(1);
-#endif
-
-    gpio_set_level(GPIO_NUM_2, 0);
-    // Set menu application
-    odroid_system_application_set(0);
-    // Reset
-    esp_restart();
+    odroid_settings_ForceInternalGameSelect_set(1);
+    DoReboot(save);
 }
-/*
-void system_manage_sram(uint8 *sram, int slot, int mode)
-{
-    printf("system_manage_sram\n");
-    //sram_load();
-}
-*/
 
 extern uint32    *gAudioEnabledPointer;
 
@@ -445,8 +380,11 @@ void menu_lynx_filtering_update(odroid_ui_entry *entry) {
 }
 
 odroid_ui_func_toggle_rc menu_lynx_filtering_toggle(odroid_ui_entry *entry, odroid_gamepad_state *joystick) {
-    filtering++;
-    if (filtering>3) filtering = 0;
+    if (joystick->values[ODROID_INPUT_A] || joystick->values[ODROID_INPUT_RIGHT]) {
+        if (++filtering>3) filtering = 0;
+    } else if (joystick->values[ODROID_INPUT_LEFT]) {
+        if (filtering--==0) filtering = 3;
+    }
     return ODROID_UI_FUNC_TOGGLE_RC_CHANGED;
 }
 
@@ -494,7 +432,6 @@ inline void update_ui_fps() {
 ODROID_DEBUG_PERF_LOG()
     }
     startTime = stopTime;
-    // usleep(20*1000UL);
 }
 
 
@@ -598,6 +535,26 @@ size_t odroid_retro_audio_sample_batch_t(const int16_t *data, size_t frames) {
     odroid_gamepad_state previousState;
     bool ignoreMenuButton, menu_restart;
     
+bool odroid_ui_menu_lynx(bool mr)
+{
+    mr = odroid_ui_menu_ext(mr, &menu_lynx_init);
+    if (previous_scaling_enabled != scaling_enabled ||
+        previous_filtering != filtering ||
+        previous_rotate != rotate) {
+      if (!mr)
+      {
+        update_display_task();
+      }
+    
+      // display_func_change = true;
+      //odroid_display_lock();
+      //ili9341_write_frame_lynx(NULL, NULL, false);
+      //update_display_func();
+      //odroid_display_unlock();
+    }
+    return mr;
+}
+    
 void process_keys(odroid_gamepad_state *joystick)
 {
 #ifndef MY_KEYS_IN_CALLBACK
@@ -628,65 +585,7 @@ void process_keys(odroid_gamepad_state *joystick)
         }
         // { RETRO_DEVICE_ID_JOYPAD_R, BUTTON_OPT2 },
 #endif
-        if (ignoreMenuButton)
-        {
-            ignoreMenuButton = previousState.values[ODROID_INPUT_MENU];
-        }
-
-        if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && joystick->values[ODROID_INPUT_MENU])
-        {
-            ++menuButtonFrameCount;
-        }
-        else
-        {
-            menuButtonFrameCount = 0;
-        }
-
-        // Note: this will cause an exception on 2nd Core in Debug mode
-        /*
-        if (menuButtonFrameCount > 60 * 2)
-        {
-            // Turn Blue LED on. Power state change turns it off
-            odroid_system_led_set(1);
-            PowerDown();
-        }
-        */
-        
-        if (menuButtonFrameCount > 60 * 1)
-        {
-            DoMenuHome(true);
-        }
-        
-        if (!ignoreMenuButton && previousState.values[ODROID_INPUT_MENU] && !joystick->values[ODROID_INPUT_MENU])
-        {
-            DoMenuHome(false);
-        }
-
-        if (joystick->values[ODROID_INPUT_VOLUME] || menu_restart)
-        {
-            menu_restart = odroid_ui_menu_ext(menu_restart, &menu_lynx_init);
-            if (previous_scaling_enabled != scaling_enabled ||
-                previous_filtering != filtering ||
-                previous_rotate != rotate) {
-              if (!menu_restart)
-              {
-                update_display_task();
-              }
-            
-              // display_func_change = true;
-              //odroid_display_lock();
-              //ili9341_write_frame_lynx(NULL, NULL, false);
-              //update_display_func();
-              //odroid_display_unlock();
-            }
-        }
-
-        // Scaling
-        if (joystick->values[ODROID_INPUT_START] && !previousState.values[ODROID_INPUT_RIGHT] && joystick->values[ODROID_INPUT_RIGHT])
-        {
-            scaling_enabled = !scaling_enabled;
-            odroid_settings_ScaleDisabled_set(ODROID_SCALE_DISABLE_SMS, scaling_enabled ? 0 : 1);
-        }
+        ODROID_UI_MENU_HANDLER_LOOP_V1(previousState, (*joystick), DoMenuHome, odroid_ui_menu_lynx)
 }
 
 #ifdef MY_KEYS_IN_CALLBACK
@@ -867,14 +766,7 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
     // Joystick.
     odroid_input_gamepad_init();
     odroid_input_battery_level_init();
-
-
-    // Boot state overrides
-    bool forceConsoleReset = false;
-
-
     ili9341_prepare();
-
 
     // Disable LCD CD to prevent garbage
     const gpio_num_t LCD_PIN_NUM_CS = GPIO_NUM_5;
@@ -889,57 +781,7 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
     gpio_config(&io_conf);
     gpio_set_level(LCD_PIN_NUM_CS, 1);
 
-    esp_sleep_source_t cause = esp_sleep_get_wakeup_cause();
-    switch (cause)
-    {
-        case ESP_SLEEP_WAKEUP_EXT0:
-        {
-            printf("app_main: ESP_SLEEP_WAKEUP_EXT0 deep sleep reset\n");
-            break;
-        }
-
-        case ESP_SLEEP_WAKEUP_EXT1:
-        case ESP_SLEEP_WAKEUP_TIMER:
-        case ESP_SLEEP_WAKEUP_TOUCHPAD:
-        case ESP_SLEEP_WAKEUP_ULP:
-        case ESP_SLEEP_WAKEUP_UNDEFINED:
-        {
-            printf("app_main: Unexpected deep sleep reset: %d\n", cause);
-
-            odroid_gamepad_state bootState = odroid_input_read_raw();
-
-            if (bootState.values[ODROID_INPUT_MENU])
-            {
-                // Force return to factory app to recover from
-                // ROM loading crashes
-
-                // Set menu application
-                odroid_system_application_set(0);
-
-                // Reset
-                esp_restart();
-            }
-
-            if (bootState.values[ODROID_INPUT_START])
-            {
-                // Reset emulator if button held at startup to
-                // override save state
-                forceConsoleReset = true;
-            }
-        }
-            break;
-
-        default:
-            printf("app_main: Not a deep sleep reset\n");
-            break;
-    }
-
-    if (odroid_settings_StartAction_get() == ODROID_START_ACTION_RESTART)
-    {
-        forceConsoleReset = true;
-        odroid_settings_StartAction_set(ODROID_START_ACTION_NORMAL);
-    }
-
+    check_boot_cause();
 
     ili9341_init();
     
@@ -1016,7 +858,7 @@ printf("lynx-handy (%s-%s).\n", COMPILEDATE, GITREV);
     frame = 0;
     scaling_enabled = odroid_settings_ScaleDisabled_get(ODROID_SCALE_DISABLE_SMS) ? false : true;
     
-    odroid_ui_debug_enter_loop();
+    odroid_ui_enter_loop();
 #ifdef ODROID_DEBUG_PERF_USE
     printf("heap_caps metadata test\n");
     heap_caps_print_heap_info(MALLOC_CAP_8BIT);
@@ -1086,123 +928,4 @@ void *my_special_alloc(unsigned char speed, unsigned char bytes, unsigned long s
 void my_special_alloc_free(void *p) {
     printf("FREE: Size: -; RC: %p\n", p);
     if (p) heap_caps_free(p);
-}
-
-void SaveState()
-{
-#ifdef MY_LYNX_INCLUDE_SAVE_TO_SD
-    // Save sram
-    odroid_input_battery_monitor_enabled_set(0);
-    odroid_system_led_set(1);
-
-    char* romPath = odroid_settings_RomFilePath_get();
-    if (romPath)
-    {
-        char* fileName = odroid_util_GetFileName(romPath);
-        if (!fileName) abort();
-
-        char* pathName = odroid_sdcard_create_savefile_path(SD_BASE_PATH, fileName);
-        if (!pathName) abort();
-
-        FILE* f = fopen(pathName, "w");
-        if (f == NULL)
-        {
-            const char *path = "/sd/odroid/data/lnx";
-            DIR* dir = opendir(path);
-            if (dir)
-            {
-                closedir(dir);
-                printf("%s: fopen save failed: '%s' ; Folder exists\n", __func__, pathName);
-                abort();
-            }
-            if (mkdir(path, 01666) != 0)
-            {
-                printf("%s: fopen save failed: '%s' ; Folder doesn't exists. Could not create\n", __func__, pathName);
-                abort();
-            }
-            f = fopen(pathName, "w");
-            if (f == NULL)
-            {
-               printf("%s: fopen save failed: '%s'\n", __func__, pathName);
-               abort();
-            }
-        }
-        {
-            uint8_t buf[8];
-            memset(buf, 0, 8);
-            buf[0] = (*gAudioEnabledPointer)&0xff;
-            buf[1] = scaling_enabled&0xff;
-            buf[2] = filtering&0xff;
-            buf[3] = rotate&0xff;
-            buf[4] = frameskip;
-            fwrite(buf,sizeof(uint8_t),8,f);
-        }
-        QuickSaveState(f);
-        fclose(f);
-
-        printf("%s: savestate OK.\n", __func__);
-
-        free(pathName);
-        free(fileName);
-        free(romPath);
-    } else
-    {
-       printf("ERROR!\n");
-    }
-#endif
-}
-
-void LoadState(const char* cartName)
-{
-#ifdef MY_LYNX_INCLUDE_SAVE_TO_SD
-    char* romName = odroid_settings_RomFilePath_get();
-    if (romName)
-    {
-        char* fileName = odroid_util_GetFileName(romName);
-        if (!fileName) abort();
-
-        char* pathName = odroid_sdcard_create_savefile_path(SD_BASE_PATH, fileName);
-        if (!pathName) abort();
-
-        FILE* f = fopen(pathName, "r");
-        if (f == NULL)
-        {
-            printf("LoadState: fopen load failed\n");
-        }
-        else
-        {
-            {
-                uint8_t buf[8];
-                memset(buf, 0, 8);
-                fread(buf,sizeof(uint8_t),8,f);
-                *gAudioEnabledPointer = buf[0];
-                scaling_enabled = buf[1];
-                filtering = buf[2];
-                rotate = buf[3];
-                frameskip = buf[4];
-                if (frameskip == 0) frameskip = 2;
-            }
-            QuickLoadState(f);
-            fclose(f);
-
-            printf("LoadState: loadstate OK.\n");
-        }
-
-        free(pathName);
-        free(fileName);
-        free(romName);
-    }
-    else
-    {
-      printf("ERROR\n");
-    }
-#endif
-}
-
-bool DoSaveState(const char* pathName) {
-    return true;
-}
-
-bool DoLoadState(const char* pathName) {
-    return true;
 }

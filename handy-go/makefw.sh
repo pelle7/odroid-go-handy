@@ -5,7 +5,8 @@ export TITLE="Atari Lynx (pelle7-`date +%Y%m%d`)"
 export IMG_TITLE=atarilynx-title.raw
 export FW_FILENAME=lynx.fw
 
-export EXE_MKFW=mkfw
+#export EXE_MKFW=mkfw
+export EXE_MKFW=/Users/torf/Documents/pelle7/ws/test2b/_git/odroid-go-firmware/tools/mkfw/mkfw
 export BIN_HANDY=build/handy-go.bin
 
 $EXE_MKFW "$TITLE" $IMG_TITLE 0 16 1048576 atarilynx $BIN_HANDY
